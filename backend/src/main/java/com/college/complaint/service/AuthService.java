@@ -22,7 +22,7 @@ import java.util.UUID;
 @Service
 public class AuthService {
 
-    private static final String INVALID_CREDENTIALS = "Invalid email or password";
+    private static final String INVALID_CREDENTIALS = "Invalid sign-in ID or password";
 
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
@@ -75,8 +75,8 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthDtos.LoginData login(LoginRequest request) {
-        String normalizedEmail = normalizeEmail(request.email());
-        UserAccount account = userRepository.findByEmailIgnoreCase(normalizedEmail).orElse(null);
+        String loginIdentifier = request.identifier().trim().toLowerCase(Locale.ROOT);
+        UserAccount account = userRepository.findByEmailIgnoreCase(loginIdentifier).orElse(null);
         String hashToCheck = account == null ? dummyPasswordHash : account.getPasswordHash();
         boolean passwordMatches = passwordEncoder.matches(request.password(), hashToCheck);
 

@@ -84,8 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = String(data.get('role') || 'student').toLowerCase();
     CampusCare.clearSession();
     if (!apiMode) {
-      const email = String(data.get('email') || '');
-      const name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || `${role[0].toUpperCase()}${role.slice(1)}`;
+      const identifier = String(data.get('identifier') || '');
+      const name = identifier.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || `${role[0].toUpperCase()}${role.slice(1)}`;
       CampusCare.setSession({ role, name, ownerId: 'demo-student' });
       notice.textContent = 'Demo sign-in successful. Opening your workspace…';
       setTimeout(() => location.href = ({ student: 'student-dashboard.html', faculty: 'faculty-dashboard.html', admin: 'admin-dashboard.html' })[role], 450);
@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const response = await CampusCareAPI.request(`auth.${role}.login`, {
         method: 'POST', timeoutMs: 60000,
-        body: { email: String(data.get('email')).trim(), password: String(data.get('password')) }, loadingTarget: login.querySelector('[type="submit"]')
+        body: { identifier: String(data.get('identifier')).trim(), password: String(data.get('password')) }, loadingTarget: login.querySelector('[type="submit"]')
       });
       const result = response?.data;
       if (!result?.token || !result?.user?.role) throw new Error('The server returned an incomplete login response.');

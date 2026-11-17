@@ -234,16 +234,39 @@ class AuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginJson("login@example.com", "WrongPassword123")))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid email or password"));
+                .andExpect(jsonPath("$.message").value("Invalid sign-in ID or password"));
     }
 
     @Test
-    void rejectsInvalidLoginEmail() throws Exception {
+    void rejectsBlankLoginIdentifier() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginJson("bad-email", PASSWORD)))
+                        .content("{\"identifier\":\" \",\"password\":\"CollegePass123\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.data.email").exists());
+                .andExpect(jsonPath("$.data.identifier").exists());
+    }
+
+    @Test
+    void adminCanLoginWithConfiguredTestId() throws Exception {
+        userRepository.save(new UserAccount(
+                null, "Sakshi Admin", "sakshi0072", passwordEncoder.encode(PASSWORD), Role.ADMIN));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identifier\":\"SAKSHI0072\",\"password\":\"CollegePass123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("ADMIN"))
+                .andExpect(jsonPath("$.data.user.email").value("sakshi0072"));
+    }
+
+    @Test
+    void loginContinuesToAcceptLegacyEmailProperty() throws Exception {
+        register("legacy-login@example.com");
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson("legacy-login@example.com", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("STUDENT"));
     }
 
     @Test

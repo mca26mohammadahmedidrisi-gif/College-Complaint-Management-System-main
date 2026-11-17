@@ -33,7 +33,7 @@ Set these variables in the backend Vercel project's environment settings:
 | `FRONTEND_URL` | Frontend origin used to build verification and reset links |
 | `FRONTEND_ORIGIN` | Exact frontend Vercel production origin, e.g. `https://your-project.vercel.app` |
 
-Keep bootstrap admin disabled unless deliberately provisioning the first admin; turn it off after setup. The backend Vercel URL must be HTTPS. Copy that base URL for the frontend Vercel configuration below.
+For the testing admin, set `APP_BOOTSTRAP_ADMIN_ENABLED=true`, `BOOTSTRAP_ADMIN_FULL_NAME`, `BOOTSTRAP_ADMIN_EMAIL=sakshi0072`, and `BOOTSTRAP_ADMIN_PASSWORD` in the backend Vercel project's Production environment, then redeploy once. The bootstrap only creates an admin if no admin account already exists. Turn it off and remove the password variable after provisioning. The login form accepts this admin ID as well as email addresses. The backend Vercel URL must be HTTPS. Copy that base URL for the frontend Vercel configuration below.
 
 ## 3. Deploy the frontend to Vercel
 

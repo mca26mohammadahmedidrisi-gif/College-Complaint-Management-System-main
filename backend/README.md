@@ -89,11 +89,11 @@ In the frontend, student registration is public and writes a student account to 
 ```text
 APP_BOOTSTRAP_ADMIN_ENABLED=true
 BOOTSTRAP_ADMIN_FULL_NAME=College Administrator
-BOOTSTRAP_ADMIN_EMAIL=admin@example.edu
-BOOTSTRAP_ADMIN_PASSWORD=<strong-one-time-password>
+BOOTSTRAP_ADMIN_EMAIL=sakshi0072
+BOOTSTRAP_ADMIN_PASSWORD=<set-privately-in-the-backend-environment>
 ```
 
-On startup, the bootstrap creates an administrator only if no admin exists. After successful provisioning, remove those values or set `APP_BOOTSTRAP_ADMIN_ENABLED=false`; do not leave the bootstrap password in deployment configuration. The bootstrap password is hashed before database storage.
+The login screen accepts a college email or an admin ID. For this testing project, set the admin ID above and enter the requested password only in the backend Vercel environment; it is never stored in source. On startup, the bootstrap creates an administrator only if no admin exists. After successful provisioning, remove those values or set `APP_BOOTSTRAP_ADMIN_ENABLED=false`; do not leave the bootstrap password in deployment configuration. The bootstrap password is hashed before database storage.
 
 ## API endpoints
 
@@ -142,10 +142,12 @@ Request:
 
 ```json
 {
-  "email": "rahul@example.com",
+  "identifier": "rahul@example.com",
   "password": "a-strong-password"
 }
 ```
+
+`identifier` accepts a registered email address or the configured test-admin ID. The previous `email` property remains accepted for existing clients.
 
 Success (`200 OK`):
 
@@ -396,7 +398,7 @@ Invalid credentials (`401`):
 ```json
 {
   "success": false,
-  "message": "Invalid email or password",
+  "message": "Invalid sign-in ID or password",
   "data": null,
   "timestamp": "2026-11-15T10:00:00Z"
 }
