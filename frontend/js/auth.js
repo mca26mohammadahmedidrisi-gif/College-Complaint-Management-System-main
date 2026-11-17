@@ -33,6 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     const notice = login.querySelector('[data-form-notice]'); const data = new FormData(login);
     if (!login.reportValidity()) return;
+    notice.className = 'form-notice';
+    notice.textContent = '';
     const role = String(data.get('role') || 'student').toLowerCase();
     CampusCare.clearSession();
     if (!apiMode) {
@@ -66,8 +68,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (register) register.addEventListener('submit', async event => {
     event.preventDefault(); const notice = register.querySelector('[data-form-notice]'); const data = new FormData(register);
     if (!register.reportValidity()) return;
-    if (data.get('password') !== data.get('confirmPassword')) { notice.textContent = 'The passwords do not match.'; document.getElementById('confirmPassword').focus(); return; }
+    if (data.get('password') !== data.get('confirmPassword')) { notice.className = 'form-notice error-text'; notice.textContent = 'The passwords do not match.'; document.getElementById('confirmPassword').focus(); return; }
     if (!apiMode) { notice.textContent = 'Registration is in preview mode. No account was created.'; CampusCare.toast('No account was created in preview mode.'); return; }
+    notice.className = 'form-notice';
     notice.textContent = 'Creating your account…';
     try {
       const response = await CampusCareAPI.request('auth.student.register', {

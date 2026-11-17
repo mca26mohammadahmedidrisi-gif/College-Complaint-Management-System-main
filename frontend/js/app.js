@@ -112,7 +112,7 @@
     const dashboard = document.body.dataset.dashboard;
     if (!dashboard || window.CAMPUSCARE_CONFIG.mode !== 'api' || !session()?.token) return;
     const right = document.querySelector('.topbar-right');
-    const legacy = right?.querySelector('[data-notice]');
+    const legacy = right?.querySelector('.icon-button:not([data-notification-toggle])');
     if (!right) return;
     legacy?.remove();
     const wrap = document.createElement('div');
@@ -193,7 +193,7 @@
         event.preventDefault(); first.focus();
       }
     });
-    document.querySelectorAll('.preview-pill').forEach(el => { if (window.CAMPUSCARE_CONFIG.mode === 'api') { el.textContent = 'Live system'; el.classList.add('live-pill'); } });
+    document.querySelectorAll('.preview-pill').forEach(el => { if (window.CAMPUSCARE_CONFIG.mode === 'api') { el.innerHTML = '<i></i>Live system'; el.classList.add('live-pill'); } });
     document.querySelectorAll('.demo-hint').forEach(el => { if (window.CAMPUSCARE_CONFIG.mode === 'api') el.innerHTML = '<span>i</span><span><b>College system</b><br>Your requests are sent to the backend.</span>'; });
     if (window.CAMPUSCARE_CONFIG.mode === 'api') {
       document.querySelectorAll('.panel-tag').forEach(el => { if (/preview data/i.test(el.textContent)) el.textContent = 'Live data'; });
@@ -201,10 +201,24 @@
       document.querySelectorAll('.privacy-banner p').forEach(el => { el.textContent = 'Staff API responses omit submitter identity. Your account is still associated with your reports for private tracking.'; });
     }
     document.querySelectorAll('.menu-toggle').forEach(button => button.addEventListener('click', () => { const nav = document.querySelector('.top-nav'); const open = nav?.classList.toggle('open'); button.setAttribute('aria-expanded', String(!!open)); }));
-    document.querySelectorAll('.mobile-menu').forEach(button => button.addEventListener('click', () => {
-      const open = document.querySelector('.sidebar')?.classList.toggle('open') || false;
+    const sidebar = document.querySelector('.sidebar');
+    const mobileMenus = [...document.querySelectorAll('.mobile-menu')];
+    const closeSidebar = () => {
+      sidebar?.classList.remove('open');
+      document.body.classList.remove('menu-open');
+      mobileMenus.forEach(button => button.setAttribute('aria-expanded', 'false'));
+    };
+    mobileMenus.forEach(button => button.addEventListener('click', () => {
+      const open = sidebar?.classList.toggle('open') || false;
+      document.body.classList.toggle('menu-open', open);
       button.setAttribute('aria-expanded', String(open));
     }));
+    document.addEventListener('click', event => {
+      if (document.body.classList.contains('menu-open') && !sidebar?.contains(event.target)
+          && !event.target.closest('.mobile-menu')) closeSidebar();
+    });
+    sidebar?.querySelectorAll('a').forEach(link => link.addEventListener('click', closeSidebar));
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeSidebar(); });
     document.querySelectorAll('[data-go-back]').forEach(button => button.addEventListener('click', () => {
       if (history.length > 1) history.back(); else location.href = 'index.html';
     }));
