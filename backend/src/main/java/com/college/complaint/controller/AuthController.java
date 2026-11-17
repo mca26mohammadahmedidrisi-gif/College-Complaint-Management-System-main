@@ -21,16 +21,46 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.college.complaint.service.AuthActionTokenService authActionTokens;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService,
+                          com.college.complaint.service.AuthActionTokenService authActionTokens) {
         this.authService = authService;
+        this.authActionTokens = authActionTokens;
     }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthDtos.RegisteredData>> register(
             @Valid @RequestBody RegisterRequest request) {
+        AuthDtos.RegisteredData registered = authService.registerStudent(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Student registered successfully", authService.registerStudent(request)));
+                .body(ApiResponse.success(registered.requiresEmailVerification()
+                        ? "Student registered. Check your email to verify the account before signing in."
+                        : "Student registered successfully", registered));
+    }
+
+    @PostMapping("/verify-email")
+    public ApiResponse<Map<String, String>> verifyEmail(@Valid @RequestBody AuthDtos.TokenRequest request) {
+        authActionTokens.verify(request.token());
+        return ApiResponse.success("Email verified successfully", Map.of("message", "You can now sign in."));
+    }
+
+    @PostMapping("/resend-verification")
+    public ApiResponse<Map<String, String>> resendVerification(@Valid @RequestBody AuthDtos.EmailRequest request) {
+        authActionTokens.resendVerification(request.email());
+        return ApiResponse.success("If the account needs verification, a link has been sent", Map.of("message", "Check your inbox."));
+    }
+
+    @PostMapping("/forgot-password")
+    public ApiResponse<Map<String, String>> forgotPassword(@Valid @RequestBody AuthDtos.EmailRequest request) {
+        authActionTokens.requestPasswordReset(request.email());
+        return ApiResponse.success("If the account exists, a reset link has been sent", Map.of("message", "Check your inbox."));
+    }
+
+    @PostMapping("/reset-password")
+    public ApiResponse<Map<String, String>> resetPassword(@Valid @RequestBody AuthDtos.PasswordResetRequest request) {
+        authActionTokens.resetPassword(request.token(), request.password());
+        return ApiResponse.success("Password changed successfully", Map.of("message", "You can now sign in."));
     }
 
     @PostMapping("/login")

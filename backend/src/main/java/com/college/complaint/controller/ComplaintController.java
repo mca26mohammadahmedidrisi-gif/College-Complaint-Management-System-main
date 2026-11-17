@@ -8,10 +8,15 @@ import com.college.complaint.dto.ComplaintSubmissionResponse;
 import com.college.complaint.dto.ComplaintStatusUpdateRequest;
 import com.college.complaint.dto.ComplaintRemovalRequest;
 import com.college.complaint.dto.ComplaintView;
+import com.college.complaint.dto.ComplaintEditRequest;
+import com.college.complaint.dto.ComplaintCommentRequest;
+import com.college.complaint.dto.ComplaintCommentView;
+import com.college.complaint.dto.ComplaintAssignmentRequest;
 import com.college.complaint.exception.ApiException;
 import com.college.complaint.service.ComplaintService;
 import com.college.complaint.service.ComplaintImageService;
 import com.college.complaint.service.ComplaintWorkflowService;
+import com.college.complaint.service.ComplaintInteractionService;
 import com.college.complaint.security.ComplaintTrackingReferenceService;
 import com.college.complaint.utility.ApiResponse;
 import jakarta.validation.Valid;
@@ -40,14 +45,17 @@ public class ComplaintController {
     private final ComplaintImageService complaintImageService;
     private final ComplaintWorkflowService workflowService;
     private final ComplaintTrackingReferenceService trackingReferences;
+    private final ComplaintInteractionService interactionService;
 
     public ComplaintController(ComplaintService complaintService, ComplaintImageService complaintImageService,
                                ComplaintWorkflowService workflowService,
-                               ComplaintTrackingReferenceService trackingReferences) {
+                               ComplaintTrackingReferenceService trackingReferences,
+                               ComplaintInteractionService interactionService) {
         this.complaintService = complaintService;
         this.complaintImageService = complaintImageService;
         this.workflowService = workflowService;
         this.trackingReferences = trackingReferences;
+        this.interactionService = interactionService;
     }
 
     @PostMapping
@@ -95,6 +103,38 @@ public class ComplaintController {
                                                     Authentication authentication) {
         return ApiResponse.success("Complaint updated successfully",
                 workflowService.update(complaintId, authenticatedUserId(authentication), request));
+    }
+
+    @PutMapping("/{complaintId}")
+    public ApiResponse<ComplaintView> editMine(@PathVariable UUID complaintId,
+                                                @Valid @RequestBody ComplaintEditRequest request,
+                                                Authentication authentication) {
+        interactionService.edit(complaintId, authenticatedUserId(authentication), request);
+        return ApiResponse.success("Complaint updated successfully",
+                workflowService.getMineById(complaintId, authenticatedUserId(authentication)));
+    }
+
+    @GetMapping("/{complaintId}/comments")
+    public ApiResponse<List<ComplaintCommentView>> getComments(@PathVariable UUID complaintId,
+                                                               Authentication authentication) {
+        return ApiResponse.success("Complaint conversation retrieved successfully",
+                interactionService.listComments(complaintId, authenticatedUserId(authentication)));
+    }
+
+    @PostMapping("/{complaintId}/comments")
+    public ResponseEntity<ApiResponse<ComplaintCommentView>> addComment(@PathVariable UUID complaintId,
+                                                                        @Valid @RequestBody ComplaintCommentRequest request,
+                                                                        Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Reply added successfully",
+                interactionService.addComment(complaintId, authenticatedUserId(authentication), request)));
+    }
+
+    @PutMapping("/{complaintId}/assignment")
+    public ApiResponse<ComplaintView> assign(@PathVariable UUID complaintId,
+                                              @RequestBody ComplaintAssignmentRequest request,
+                                              Authentication authentication) {
+        return ApiResponse.success("Complaint assignment updated successfully",
+                workflowService.assign(complaintId, authenticatedUserId(authentication), request));
     }
 
     @PutMapping("/{complaintId}/remove")

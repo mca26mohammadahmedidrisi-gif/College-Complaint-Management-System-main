@@ -141,12 +141,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const track = document.getElementById('track-form');
   if (track) {
     if (apiMode && !CampusCare.session()?.token) location.href = 'login.html';
+    let categories = [];
+    const loadCategories = async () => {
+      if (!apiMode || categories.length) return categories;
+      const response = await CampusCareAPI.request('complaints.categories');
+      categories = response?.data || [];
+      return categories;
+    };
     const render = complaint => {
       const result = document.querySelector('[data-status-result]'), empty = document.querySelector('[data-status-empty]');
       const status = CampusCare.displayStatus(complaint.status);
       const building = complaint.building || '', floor = complaint.floor || '', room = complaint.classroom || '';
       const removalNotice = complaint.removed ? `<div class="remarks-box"><b>Removed from the active faculty queue</b><p>${CampusCare.esc(complaint.removalReason || 'The faculty team removed this report.')}</p></div>` : '';
-      result.innerHTML = `<div class="status-result-head"><div><span class="status-id">${CampusCare.esc(complaint.trackingReference || complaint.id)}</span><h2>${CampusCare.esc(complaint.title)}</h2><small class="muted">Submitted ${CampusCare.formatDate(complaint.submittedAt || complaint.date)}</small></div>${CampusCare.statusBadge(status)}</div><p class="status-description">${CampusCare.esc(complaint.description)}</p><div class="status-meta"><div><small>Category</small><b>${CampusCare.esc(complaint.category)}</b></div><div><small>Building</small><b>${CampusCare.esc(building)}</b></div><div><small>Floor</small><b>${CampusCare.esc(floor)}</b></div><div><small>Classroom / room</small><b>${CampusCare.esc(room)}</b></div></div>${removalNotice}${complaint.remarks ? `<div class="remarks-box"><b>Staff remarks</b><p>${CampusCare.esc(complaint.remarks)}</p></div>` : '<div class="remarks-box"><b>Staff remarks</b><p>No remarks have been added yet.</p></div>'}`;
+      const canEdit = apiMode && !complaint.removed && complaint.status === 'PENDING';
+      const editMarkup = canEdit ? `<section class="complaint-edit"><button type="button" class="button button-outline" data-edit-toggle>Edit complaint</button><form class="complaint-edit-form hidden" data-edit-complaint-form><label class="field-label" for="edit-title">Title</label><input id="edit-title" name="title" maxlength="200" value="${CampusCare.esc(complaint.title)}" required><label class="field-label" for="edit-category">Category</label><select id="edit-category" name="categoryId">${categories.map(item => `<option value="${CampusCare.esc(item.categoryId)}" ${item.categoryId === complaint.categoryId ? 'selected' : ''}>${CampusCare.esc(item.categoryName)}</option>`).join('')}</select><label class="field-label" for="edit-building">Building</label><select id="edit-building" data-edit-building required><option value="">Loading buildings...</option></select><label class="field-label" for="edit-floor">Floor</label><select id="edit-floor" data-edit-floor required disabled><option value="">Choose a building first</option></select><label class="field-label" for="edit-classroom">Room or common area</label><select id="edit-classroom" name="classroomId" data-edit-classroom required disabled><option value="">Choose a floor first</option></select><label class="field-label" for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="10000" required>${CampusCare.esc(complaint.description)}</textarea><button class="button button-primary" type="submit">Save changes</button><p class="form-notice" data-edit-notice role="status" aria-live="polite"></p><small>Edits are allowed while this report is awaiting review. Previous versions are retained for audit.</small></form></section>` : '';
+      const conversationMarkup = apiMode ? '<div data-complaint-conversation></div>' : '';
+      result.innerHTML = `<div class="status-result-head"><div><span class="status-id">${CampusCare.esc(complaint.trackingReference || complaint.id)}</span><h2>${CampusCare.esc(complaint.title)}</h2><small class="muted">Submitted ${CampusCare.formatDate(complaint.submittedAt || complaint.date)}</small></div>${CampusCare.statusBadge(status)}</div><p class="status-description">${CampusCare.esc(complaint.description)}</p><div class="status-meta"><div><small>Category</small><b>${CampusCare.esc(complaint.category)}</b></div><div><small>Building</small><b>${CampusCare.esc(building)}</b></div><div><small>Floor</small><b>${CampusCare.esc(floor)}</b></div><div><small>Classroom / room</small><b>${CampusCare.esc(room)}</b></div></div>${removalNotice}${complaint.remarks ? `<div class="remarks-box"><b>Staff remarks</b><p>${CampusCare.esc(complaint.remarks)}</p></div>` : '<div class="remarks-box"><b>Staff remarks</b><p>No remarks have been added yet.</p></div>'}${editMarkup}${conversationMarkup}`;
       if (Array.isArray(complaint.history) && complaint.history.length) {
         const historyBox = document.createElement('section'); historyBox.className = 'complaint-history';
         const heading = document.createElement('h3'); heading.textContent = 'Status history'; historyBox.append(heading);
@@ -154,7 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const entry = document.createElement('div'); entry.className = 'complaint-history-entry';
           const title = document.createElement('b'); title.textContent = CampusCare.displayStatus(event.newStatus);
           const date = document.createElement('small'); date.textContent = CampusCare.formatDate(event.changedAt);
-          entry.append(title, date);
+          const actor = document.createElement('small'); actor.textContent = `Updated by ${event.changedBy || 'Staff'}`;
+          entry.append(title, date, actor);
           if (event.remarks) { const note = document.createElement('p'); note.textContent = event.remarks; entry.append(note); }
           historyBox.append(entry);
         });
@@ -162,13 +173,93 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       result.classList.remove('hidden'); empty.classList.add('hidden');
       if (apiMode) CampusCare.loadComplaintImages(result, complaint.complaintId || complaint.trackingReference);
+      if (apiMode && complaint.complaintId) {
+        const conversation = result.querySelector('[data-complaint-conversation]');
+        if (conversation) CampusCare.loadComplaintConversation(conversation, complaint.complaintId, { allowReply: !complaint.removed });
+        const editForm = result.querySelector('[data-edit-complaint-form]');
+        if (editForm) loadEditLocations(editForm, complaint);
+      }
     };
+    const loadEditLocations = async (form, complaint) => {
+      const building = form.querySelector('[data-edit-building]');
+      const floor = form.querySelector('[data-edit-floor]');
+      const classroom = form.querySelector('[data-edit-classroom]');
+      const notice = form.querySelector('[data-edit-notice]');
+      const fill = (select, items, idField, nameField, prompt, selected) => {
+        select.replaceChildren(new Option(prompt, ''));
+        items.forEach(item => select.add(new Option(item[nameField], item[idField])));
+        select.disabled = items.length === 0;
+        if (selected) select.value = selected;
+      };
+      const loadFloors = async (buildingId, selectedFloor = '') => {
+        floor.disabled = true; classroom.disabled = true;
+        fill(floor, [], 'floorId', 'floorName', 'Choose a floor', '');
+        fill(classroom, [], 'classroomId', 'classroomName', 'Choose a room', '');
+        if (!buildingId) return;
+        const response = await CampusCareAPI.request('locations.floors', { pathParams: { buildingId } });
+        fill(floor, response.data || [], 'floorId', 'floorName', 'Choose a floor', selectedFloor);
+        if (selectedFloor) await loadClassrooms(selectedFloor, complaint.classroomId);
+      };
+      const loadClassrooms = async (floorId, selectedClassroom = '') => {
+        classroom.disabled = true;
+        fill(classroom, [], 'classroomId', 'classroomName', 'Choose a room', '');
+        if (!floorId) return;
+        const response = await CampusCareAPI.request('locations.rooms', { pathParams: { floorId } });
+        fill(classroom, response.data || [], 'classroomId', 'classroomName', 'Choose a room', selectedClassroom);
+      };
+      try {
+        const response = await CampusCareAPI.request('locations.buildings');
+        fill(building, response.data || [], 'buildingId', 'buildingName', 'Choose a building', complaint.buildingId);
+        await loadFloors(complaint.buildingId, complaint.floorId);
+        building.addEventListener('change', () => loadFloors(building.value).catch(error => { notice.className = 'form-notice error-text'; notice.textContent = error.response?.message || error.message; }));
+        floor.addEventListener('change', () => loadClassrooms(floor.value).catch(error => { notice.className = 'form-notice error-text'; notice.textContent = error.response?.message || error.message; }));
+      } catch (error) {
+        notice.className = 'form-notice error-text';
+        notice.textContent = error.response?.message || 'Location options could not be loaded.';
+      }
+    };
+    resultEvents();
+    function resultEvents() {
+      const result = document.querySelector('[data-status-result]');
+      result.addEventListener('click', event => {
+        if (event.target.closest('[data-edit-toggle]')) result.querySelector('[data-edit-complaint-form]')?.classList.toggle('hidden');
+      });
+      result.addEventListener('submit', async event => {
+        if (!event.target.matches('[data-edit-complaint-form]')) return;
+        event.preventDefault();
+        const form = event.target;
+        if (!form.reportValidity()) return;
+        const values = new FormData(form);
+        const notice = form.querySelector('[data-edit-notice]');
+        const submit = form.querySelector('[type="submit"]');
+        submit.disabled = true;
+        try {
+          const response = await CampusCareAPI.request('complaints.edit', {
+            method: 'PUT', pathParams: { complaintId: form.closest('[data-status-result]').dataset.complaintId },
+            body: { title: String(values.get('title')).trim(), description: String(values.get('description')).trim(),
+              categoryId: String(values.get('categoryId')), classroomId: String(values.get('classroomId')) }
+          });
+          if (!response?.success) throw new Error(response?.message || 'Complaint could not be updated.');
+          CampusCare.toast('Complaint changes saved.', 'success');
+          track.requestSubmit();
+        } catch (error) {
+          notice.className = 'form-notice error-text'; notice.textContent = error.response?.message || error.message;
+          submit.disabled = false;
+        }
+      });
+    }
     track.addEventListener('submit', async event => {
       event.preventDefault(); const reference = String(new FormData(track).get('reference') || '').trim();
       if (!reference) { document.querySelector('[data-track-error]').textContent = 'Enter a complaint reference.'; return; }
       document.querySelector('[data-track-error]').textContent = '';
       if (apiMode) {
-        try { render(unwrap(await CampusCareAPI.request('complaints.getMine', { pathParams: { trackingReference: reference } }))); }
+        try {
+          await loadCategories();
+          const complaint = unwrap(await CampusCareAPI.request('complaints.getMine', { pathParams: { trackingReference: reference } }));
+          const result = document.querySelector('[data-status-result]');
+          result.dataset.complaintId = complaint.complaintId;
+          render(complaint);
+        }
         catch (error) { document.querySelector('[data-status-result]').classList.add('hidden'); document.querySelector('[data-status-empty]').classList.remove('hidden'); document.querySelector('[data-track-error]').textContent = error.response?.message || 'That complaint was not found in your account.'; }
         return;
       }

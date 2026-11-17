@@ -14,6 +14,6 @@ public interface ComplaintOwnershipRepository extends JpaRepository<ComplaintOwn
 
     boolean existsByComplaint_ComplaintIdAndUser_UserId(UUID complaintId, UUID userId);
 
-    @EntityGraph(attributePaths = {"complaint.category", "complaint.building", "complaint.floor", "complaint.classroom"})
+    @EntityGraph(attributePaths = {"complaint.category", "complaint.building", "complaint.floor", "complaint.classroom", "complaint.assignedTo"})
     List<ComplaintOwnership> findAllByUser_UserIdOrderByCreatedAtDesc(UUID userId);
 }

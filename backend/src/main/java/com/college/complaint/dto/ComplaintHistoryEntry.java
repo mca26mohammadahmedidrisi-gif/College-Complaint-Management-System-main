@@ -7,5 +7,6 @@ public record ComplaintHistoryEntry(
         ComplaintStatus previousStatus,
         ComplaintStatus newStatus,
         String remarks,
-        Instant changedAt
+        Instant changedAt,
+        String changedBy
 ) { }

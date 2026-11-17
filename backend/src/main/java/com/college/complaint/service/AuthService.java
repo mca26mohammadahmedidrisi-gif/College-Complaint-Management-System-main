@@ -29,15 +29,21 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
     private final String dummyPasswordHash;
+    private final AuthActionTokenService authActionTokens;
+    private final EmailDeliveryService emailDelivery;
 
     public AuthService(UserRepository userRepository,
                        DepartmentRepository departmentRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtTokenService jwtTokenService) {
+                       JwtTokenService jwtTokenService,
+                       AuthActionTokenService authActionTokens,
+                       EmailDeliveryService emailDelivery) {
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
+        this.authActionTokens = authActionTokens;
+        this.emailDelivery = emailDelivery;
         // Do a BCrypt match even when an email does not exist to reduce timing-based
         // account enumeration. This random hash is never stored or used for login.
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
@@ -60,8 +66,10 @@ public class AuthService {
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
                 Role.STUDENT);
+        account.setEmailVerified(!emailDelivery.enabled());
         UserAccount saved = userRepository.save(account);
-        return new AuthDtos.RegisteredData(saved.getUserId(), toSummary(saved));
+        if (emailDelivery.enabled()) authActionTokens.sendVerification(saved.getUserId(), saved.getEmail());
+        return new AuthDtos.RegisteredData(saved.getUserId(), toSummary(saved), emailDelivery.enabled());
     }
 
     @Transactional(readOnly = true)
@@ -73,6 +81,9 @@ public class AuthService {
 
         if (account == null || !account.isActive() || !passwordMatches) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS);
+        }
+        if (!account.isEmailVerified()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Verify your email before signing in");
         }
 
         JwtTokenService.IssuedToken issuedToken = jwtTokenService.issue(account);
@@ -118,7 +129,7 @@ public class AuthService {
         UserAccount account = new UserAccount(
                 departmentId, fullName.trim(), normalizedEmail, passwordEncoder.encode(password), role);
         UserAccount saved = userRepository.save(account);
-        return new AuthDtos.RegisteredData(saved.getUserId(), toSummary(saved));
+        return new AuthDtos.RegisteredData(saved.getUserId(), toSummary(saved), false);
     }
 
     private AuthDtos.UserSummary toSummary(UserAccount account) {

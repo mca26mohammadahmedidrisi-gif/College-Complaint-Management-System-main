@@ -83,7 +83,7 @@ public class ComplaintService {
         // Identity is written only to the private ownership table, never to complaints.
         ownershipRepository.save(new ComplaintOwnership(complaint, user));
         historyRepository.save(new ComplaintStatusHistory(
-                complaint, null, ComplaintStatus.PENDING, "Complaint submitted"));
+                complaint, null, ComplaintStatus.PENDING, "Complaint submitted", user));
 
         return new ComplaintSubmissionResponse(
                 trackingReferenceService.generate(complaint.getComplaintId()),

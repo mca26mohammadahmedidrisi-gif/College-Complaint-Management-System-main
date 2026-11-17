@@ -120,12 +120,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!departmentId) { notice.textContent = 'Choose your department.'; return; }
     notice.textContent = 'Creating your account…';
     try {
-      await CampusCareAPI.request('auth.student.register', {
+      const response = await CampusCareAPI.request('auth.student.register', {
         method: 'POST', timeoutMs: 60000,
         body: { fullName: String(data.get('fullName')).trim(), email: String(data.get('email')).trim(), password: String(data.get('password')), departmentId }, loadingTarget: register.querySelector('[type="submit"]')
       });
-      notice.className = 'form-notice success-text'; notice.textContent = 'Account created. Sign in with your new account.';
-      setTimeout(() => location.href = 'login.html', 700);
+      notice.className = 'form-notice success-text';
+      if (response?.data?.requiresEmailVerification) {
+        notice.textContent = 'Account created. Check your email and verify your address before signing in.';
+      } else {
+        notice.textContent = 'Account created. You can sign in with your new account.';
+        setTimeout(() => location.href = 'login.html', 900);
+      }
     } catch (error) { showError(notice, error); }
   });
 });

@@ -9,7 +9,7 @@ The database is Supabase PostgreSQL. Initialize a new project in Supabase SQL Ed
 1. `src/main/resources/db/schema.sql`
 2. `src/main/resources/db/seed.sql`
 
-For a project where the schema was already created, do not rerun `schema.sql`. Run `src/main/resources/db/enable-rls.sql` once, then rerun the idempotent `seed.sql`. If existing complaints have a null `department_id`, run `src/main/resources/db/repair-complaint-routing.sql`; it fills only null values and preserves any existing non-null routing. Before deploying the moderation code, run `src/main/resources/db/soft-remove-complaints.sql` once; it adds nullable audit columns and is safe to rerun. No browser-facing RLS policies are created; application access goes through the backend.
+For a project where the schema was already created, do not rerun `schema.sql`. Run `src/main/resources/db/enable-rls.sql` once, then rerun the idempotent `seed.sql`. If existing complaints have a null `department_id`, run `src/main/resources/db/repair-complaint-routing.sql`; it fills only null values and preserves any existing non-null routing. Before deploying the current backend, run `src/main/resources/db/production-workflow-upgrade.sql` in Supabase SQL Editor and wait for success. It adds the email-verification flag, complaint edit/revision, comments, assignment and actor history, notifications, removal audit, and token tables. Hibernate validates the schema at startup, so deploying before this migration can make the Vercel API return HTTP 500. No browser-facing RLS policies are created; application access goes through the backend.
 
 `schema.sql` creates the tables and indexes and is intended for a new/empty schema. It is not a migration and is not safe to run twice without planning a migration. The seed file can be rerun; it uses unique keys to avoid duplicate reference rows. It adds seven configured campus levels across Main Building, Science Building, and Sports Complex, including canteen, labs, library, gym, courts, sports ground, and common-area locations. Review those names against the actual campus layout before running it. Hibernate is configured to validate mapped tables and never create or alter the database schema.
 
@@ -24,8 +24,12 @@ SUPABASE_STORAGE_BUCKET=complaint-images
 SUPABASE_SERVICE_ROLE_KEY=<server-only-service-role-key>
 SUPABASE_SIGNED_URL_TTL_SECONDS=300
 FRONTEND_ORIGIN=http://localhost:5500,http://127.0.0.1:5500,http://localhost:3000
+APP_EMAIL_ENABLED=false
+FRONTEND_URL=https://campuscare-frontend-seven.vercel.app
 PORT=8080
 ```
+
+For production email verification, password reset, and complaint-update emails, configure `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM` on the backend Vercel project, then set `APP_EMAIL_ENABLED=true`. The application stores only SHA-256 hashes of single-use email tokens. With email disabled, registration remains available without email verification, while password reset and verification resend return HTTP 503 instead of claiming a message was sent.
 
 `SUPABASE_DB_URL` contains only the JDBC host, port, database, and SSL option. Keep the username and password in their separate environment variables; do not put the password in the URL or URL-encode it when using these separate variables. Copy the host, port, and username exactly from the Supabase Connect dialog. Use the session pooler on port 5432 when the local network cannot reach the direct IPv6 endpoint.
 
@@ -75,6 +79,8 @@ Do not reuse the JWT key. Rotating this key invalidates previously issued tracki
 Never commit the signing key or expose it to the frontend. The default token lifetime is 1 hour; set the backend Vercel variable `JWT_EXPIRATION_SECONDS` to `3600` as well if it already overrides the default. JWTs contain a user UUID subject and role claim, but no email or name. Spring Security validates the signature, issuer, and expiration on protected API requests. Keep `JWT_SECRET_BASE64` identical across backend instances and deployments so tokens remain valid consistently.
 
 Public registration creates students only. An admin can create faculty or additional admin accounts through `POST /api/admin/users`. Student creation through this route is rejected. Faculty must include an existing `departmentId`; admin department is optional.
+
+Student complaints can be edited while still `PENDING`; the previous title, description, category, and location are retained in `complaint_revisions`. Students and authorized staff can reply in the complaint thread. Student author labels are anonymized in staff responses. Administrators can assign an active faculty account from the complaint department; once assigned, only that faculty member can manage the report. Each status and assignment change records its actor. In-app notices are polled by dashboards; email delivery requires the SMTP settings above.
 
 `GET /api/admin/users` returns the admin-only account directory with name, email, role, department, active state, and registration time. It never returns password hashes. The admin dashboard uses this directory to show enrolled students and existing staff.
 

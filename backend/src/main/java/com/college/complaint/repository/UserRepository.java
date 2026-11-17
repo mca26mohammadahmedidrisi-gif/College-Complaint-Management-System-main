@@ -17,4 +17,6 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID> {
     boolean existsByRole(Role role);
 
     java.util.List<UserAccount> findAll(Sort sort);
+
+    java.util.List<UserAccount> findAllByRoleAndDepartmentIdAndActiveTrueOrderByFullNameAsc(Role role, UUID departmentId);
 }

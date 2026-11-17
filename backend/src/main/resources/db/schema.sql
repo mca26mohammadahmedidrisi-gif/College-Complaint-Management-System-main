@@ -17,6 +17,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(20) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    email_verified BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_users_department
@@ -85,12 +86,15 @@ CREATE TABLE complaints (
     removed_at TIMESTAMPTZ,
     removed_by_user_id UUID,
     removal_reason TEXT,
+    assigned_to_user_id UUID,
     CONSTRAINT fk_complaints_category
         FOREIGN KEY (category_id) REFERENCES complaint_categories (category_id) ON DELETE RESTRICT,
     CONSTRAINT fk_complaints_department
         FOREIGN KEY (department_id) REFERENCES departments (department_id) ON DELETE RESTRICT,
     CONSTRAINT fk_complaints_removed_by
         FOREIGN KEY (removed_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_complaints_assigned_to
+        FOREIGN KEY (assigned_to_user_id) REFERENCES users (user_id) ON DELETE RESTRICT,
     -- These composite keys make it impossible to pair a classroom with a different floor/building.
     CONSTRAINT fk_complaints_building_floor
         FOREIGN KEY (building_id, floor_id) REFERENCES floors (building_id, floor_id) ON DELETE RESTRICT,
@@ -124,9 +128,12 @@ CREATE TABLE complaint_status_history (
     previous_status VARCHAR(20),
     new_status VARCHAR(20) NOT NULL,
     remarks TEXT,
+    changed_by_user_id UUID,
     changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_status_history_complaint
         FOREIGN KEY (complaint_id) REFERENCES complaints (complaint_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_status_history_changed_by
+        FOREIGN KEY (changed_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT,
     CONSTRAINT ck_history_previous_status
         CHECK (previous_status IS NULL OR previous_status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED')),
     CONSTRAINT ck_history_new_status
@@ -146,6 +153,54 @@ CREATE TABLE complaint_ownership (
         FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE RESTRICT
 );
 
+CREATE TABLE complaint_comments (
+    comment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_id UUID NOT NULL REFERENCES complaints (complaint_id) ON DELETE RESTRICT,
+    author_user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
+    body TEXT NOT NULL CHECK (length(trim(body)) BETWEEN 1 AND 4000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE complaint_revisions (
+    revision_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_id UUID NOT NULL REFERENCES complaints (complaint_id) ON DELETE RESTRICT,
+    edited_by_user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
+    old_title VARCHAR(200) NOT NULL,
+    old_description TEXT NOT NULL,
+    old_category_id UUID NOT NULL REFERENCES complaint_categories (category_id) ON DELETE RESTRICT,
+    old_classroom_id UUID NOT NULL REFERENCES classrooms (classroom_id) ON DELETE RESTRICT,
+    edited_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE complaint_assignment_history (
+    assignment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_id UUID NOT NULL REFERENCES complaints (complaint_id) ON DELETE RESTRICT,
+    previous_assignee_user_id UUID REFERENCES users (user_id) ON DELETE RESTRICT,
+    new_assignee_user_id UUID REFERENCES users (user_id) ON DELETE RESTRICT,
+    changed_by_user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE notifications (
+    notification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
+    complaint_id UUID REFERENCES complaints (complaint_id) ON DELETE RESTRICT,
+    notification_type VARCHAR(40) NOT NULL,
+    message VARCHAR(500) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMPTZ
+);
+
+CREATE TABLE auth_action_tokens (
+    token_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+    purpose VARCHAR(24) NOT NULL CHECK (purpose IN ('VERIFY_EMAIL', 'PASSWORD_RESET')),
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Supabase clients using the anon/authenticated roles cannot read ownership records.
 -- There are intentionally no client-facing RLS policies on this table. The backend must
 -- use its private database connection and authorize access in application services.
@@ -163,6 +218,11 @@ ALTER TABLE complaint_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE complaints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE complaint_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE complaint_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE complaint_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE complaint_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE complaint_assignment_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_action_tokens ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX idx_users_department_id ON users (department_id);
 CREATE INDEX idx_users_role_active ON users (role, is_active);
@@ -174,6 +234,13 @@ CREATE INDEX idx_complaints_floor_classroom ON complaints (floor_id, classroom_i
 CREATE INDEX idx_complaints_category_id ON complaints (category_id);
 CREATE INDEX idx_complaints_active_department_created_at
     ON complaints (department_id, created_at DESC) WHERE removed_at IS NULL;
+CREATE INDEX idx_complaints_assignee_status ON complaints (assigned_to_user_id, status) WHERE removed_at IS NULL;
 CREATE INDEX idx_complaint_images_complaint_id ON complaint_images (complaint_id);
 CREATE INDEX idx_status_history_complaint_changed_at ON complaint_status_history (complaint_id, changed_at DESC);
 CREATE INDEX idx_complaint_ownership_user_id_created_at ON complaint_ownership (user_id, created_at DESC);
+CREATE INDEX idx_complaint_comments_complaint_created ON complaint_comments (complaint_id, created_at);
+CREATE INDEX idx_complaint_revisions_complaint_edited ON complaint_revisions (complaint_id, edited_at DESC);
+CREATE INDEX idx_assignment_history_complaint_changed ON complaint_assignment_history (complaint_id, changed_at DESC);
+CREATE INDEX idx_notifications_user_unread ON notifications (user_id, created_at DESC) WHERE read_at IS NULL;
+CREATE INDEX idx_auth_action_tokens_user_purpose ON auth_action_tokens (user_id, purpose, expires_at DESC);
+CREATE INDEX idx_auth_action_tokens_user_created ON auth_action_tokens (user_id, purpose, created_at DESC);

@@ -14,16 +14,16 @@ import java.util.List;
 
 public interface ComplaintRepository extends JpaRepository<Complaint, UUID> {
 
-    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
+    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom", "assignedTo"})
     List<Complaint> findAllByOrderByCreatedAtDesc();
 
-    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
+    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom", "assignedTo"})
     List<Complaint> findAllByRemovedAtIsNullOrderByCreatedAtDesc();
 
-    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
+    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom", "assignedTo"})
     List<Complaint> findAllByDepartmentIdOrderByCreatedAtDesc(UUID departmentId);
 
-    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
+    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom", "assignedTo"})
     List<Complaint> findAllByDepartmentIdAndRemovedAtIsNullOrderByCreatedAtDesc(UUID departmentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

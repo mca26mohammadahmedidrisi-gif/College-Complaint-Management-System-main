@@ -4,7 +4,7 @@ The frontend and Java 17 Spring Boot API can both run on Vercel as separate Verc
 
 ## 1. Prepare the Supabase project
 
-This project already has a schema and migration scripts. Do not run `schema.sql` on the existing database. In the Supabase SQL Editor, check whether the previous audit's database steps have been applied. If not, apply `backend/src/main/resources/db/enable-rls.sql` once, rerun the idempotent `seed.sql`, and apply `repair-complaint-routing.sql` once if the existing complaints have null `department_id` values. **Before deploying the complaint moderation backend, run `backend/src/main/resources/db/soft-remove-complaints.sql` once** to add the reversible-removal audit columns to an existing database. The repeatable seed adds seven configured campus levels and named canteen, lab, library, gym, court, field, and common-area locations; review its names against the real campus first. Review `PROJECT-AUDIT.md` before changing production data.
+This project already has a schema and migration scripts. Do not run `schema.sql` on the existing database. In the Supabase SQL Editor, check whether the previous audit's database steps have been applied. If not, apply `backend/src/main/resources/db/enable-rls.sql` once, rerun the idempotent `seed.sql`, and apply `repair-complaint-routing.sql` once if the existing complaints have null `department_id` values. **Before deploying the current backend, run `backend/src/main/resources/db/production-workflow-upgrade.sql` in Supabase SQL Editor and wait for success. It is repeatable and adds reply, edit-history, assignment, actor-history, notification, removal, and email-token schema. Do not deploy the backend until the SQL reports success.** The repeatable seed adds seven configured campus levels and named canteen, lab, library, gym, court, field, and common-area locations; review its names against the real campus first. Review `PROJECT-AUDIT.md` before changing production data.
 
 In Supabase **Project Settings → Database → Connect**, copy the database connection details. For a persistent container, use the direct connection when its network supports IPv6; otherwise use the shared **Session pooler**. Use its exact host, port, and username. The application uses JDBC with SSL. Set the database password separately from the JDBC URL. The application database role must be allowed to access the application schema and tables despite RLS (the application uses a server-side database connection; never put its credentials in the browser).
 
@@ -28,6 +28,9 @@ Set these variables in the backend Vercel project's environment settings:
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only key from Supabase Project Settings → API Keys |
 | `JWT_SECRET_BASE64` | Fresh base64 secret that decodes to at least 32 random bytes |
 | `COMPLAINT_TRACKING_SECRET_BASE64` | A different fresh base64 secret of at least 32 random bytes |
+| `APP_EMAIL_ENABLED` | Set to `true` only after SMTP values are configured |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | SMTP provider credentials and verified sender; keep these backend-only |
+| `FRONTEND_URL` | Frontend origin used to build verification and reset links |
 | `FRONTEND_ORIGIN` | Exact frontend Vercel production origin, e.g. `https://your-project.vercel.app` |
 
 Keep bootstrap admin disabled unless deliberately provisioning the first admin; turn it off after setup. The backend Vercel URL must be HTTPS. Copy that base URL for the frontend Vercel configuration below.
@@ -40,7 +43,7 @@ The generated `frontend/dist/js/deployment-config.js` contains only the public A
 
 ## 4. Verify the deployment
 
-Check `https://<backend-project>.vercel.app/actuator/health`, then open the frontend Vercel URL. Register a student, sign in, submit a report, and confirm it appears in that student's dashboard. Also verify faculty department scoping and admin operations with separate accounts. The frontend and API must use HTTPS and `FRONTEND_ORIGIN` must contain the exact frontend Vercel origin. Keep Supabase secrets out of chat and source control.
+Check `https://<backend-project>.vercel.app/actuator/health`, then open the frontend Vercel URL. Register a student, verify the email when SMTP is enabled, submit a report, edit it while pending, and test student/faculty replies. As admin, assign it to a same-department faculty account; confirm status history actors, notifications, removal audit, and password reset. Also verify faculty department scoping with separate accounts. The frontend and API must use HTTPS and `FRONTEND_ORIGIN` must contain the exact frontend Vercel origin. Keep Supabase secrets out of chat and source control.
 
 ## Local configuration
 

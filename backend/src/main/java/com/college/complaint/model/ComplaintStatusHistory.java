@@ -40,6 +40,10 @@ public class ComplaintStatusHistory {
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "changed_by_user_id")
+    private UserAccount changedBy;
+
     @Column(name = "changed_at", nullable = false, updatable = false)
     private Instant changedAt;
 
@@ -48,10 +52,16 @@ public class ComplaintStatusHistory {
 
     public ComplaintStatusHistory(Complaint complaint, ComplaintStatus previousStatus,
                                   ComplaintStatus newStatus, String remarks) {
+        this(complaint, previousStatus, newStatus, remarks, null);
+    }
+
+    public ComplaintStatusHistory(Complaint complaint, ComplaintStatus previousStatus,
+                                  ComplaintStatus newStatus, String remarks, UserAccount changedBy) {
         this.complaint = complaint;
         this.previousStatus = previousStatus;
         this.newStatus = newStatus;
         this.remarks = remarks;
+        this.changedBy = changedBy;
     }
 
     @PrePersist
@@ -83,5 +93,9 @@ public class ComplaintStatusHistory {
 
     public Instant getChangedAt() {
         return changedAt;
+    }
+
+    public UserAccount getChangedBy() {
+        return changedBy;
     }
 }

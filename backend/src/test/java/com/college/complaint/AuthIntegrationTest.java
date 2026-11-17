@@ -191,6 +191,16 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void passwordRecoveryDoesNotClaimToSendEmailWhenSmtpIsNotConfigured() throws Exception {
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"student@example.com\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(containsString("Email delivery is not enabled")));
+    }
+
+    @Test
     void facultyAndAdminAccountsCanLogin() throws Exception {
         UserAccount faculty = userRepository.save(new UserAccount(
                 departmentId, "Faculty User", "faculty@example.com", passwordEncoder.encode(PASSWORD), Role.FACULTY));

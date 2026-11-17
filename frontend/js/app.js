@@ -67,10 +67,94 @@
       if (gallery.childElementCount) container.append(gallery);
     } catch (_) { /* A missing image does not block the complaint details. */ }
   };
+  const loadComplaintConversation = async (container, complaintId, { allowReply = true } = {}) => {
+    if (window.CAMPUSCARE_CONFIG.mode !== 'api' || !container || !complaintId) return;
+    container.dataset.conversationId = String(complaintId);
+    container.innerHTML = '<section class="complaint-history"><h3>Conversation</h3><p>Loading replies…</p></section>';
+    try {
+      const response = await CampusCareAPI.request('complaints.comments', { pathParams: { complaintId } });
+      if (container.dataset.conversationId !== String(complaintId) || !response?.success) return;
+      const messages = Array.isArray(response.data) ? response.data : [];
+      const articles = messages.map(item => `<article class="complaint-history-entry"><b>${esc(item.author)}</b><small>${formatDate(item.createdAt)}</small><p>${esc(item.body)}</p></article>`).join('');
+      container.innerHTML = `<section class="complaint-history"><h3>Conversation</h3>${articles || '<p>No replies yet.</p>'}${allowReply ? `<form data-comment-form><label class="field-label" for="conversation-reply">Reply</label><textarea id="conversation-reply" name="body" class="remarks-input" maxlength="4000" required placeholder="Write a reply for the complaint team"></textarea><button class="button button-primary" type="submit">Send reply</button><p class="form-notice" data-comment-notice role="status" aria-live="polite"></p></form>` : ''}</section>`;
+      container.onsubmit = async event => {
+        if (!event.target.matches('[data-comment-form]')) return;
+        event.preventDefault();
+        const form = event.target;
+        if (!form.reportValidity()) return;
+        const notice = form.querySelector('[data-comment-notice]');
+        const submit = form.querySelector('[type="submit"]');
+        submit.disabled = true;
+        try {
+          const body = String(new FormData(form).get('body') || '').trim();
+          const added = await CampusCareAPI.request('complaints.addComment', { method: 'POST', pathParams: { complaintId }, body: { body } });
+          if (!added?.success) throw new Error(added?.message || 'The reply could not be sent.');
+          await loadComplaintConversation(container, complaintId, { allowReply });
+        } catch (error) {
+          notice.className = 'form-notice error-text';
+          notice.textContent = error.response?.message || error.message || 'The reply could not be sent.';
+          submit.disabled = false;
+        }
+      };
+    } catch (error) {
+      if (container.dataset.conversationId === String(complaintId)) container.textContent = error.response?.message || 'Conversation could not be loaded.';
+    }
+  };
+
+  const initializeNotifications = () => {
+    const dashboard = document.body.dataset.dashboard;
+    if (!dashboard || window.CAMPUSCARE_CONFIG.mode !== 'api' || !session()?.token) return;
+    const right = document.querySelector('.topbar-right');
+    const legacy = right?.querySelector('[data-notice]');
+    if (!right) return;
+    legacy?.remove();
+    const wrap = document.createElement('div');
+    wrap.className = 'notification-wrap';
+    wrap.innerHTML = '<button type="button" class="icon-button" aria-label="Notifications" aria-expanded="false" data-notification-toggle>♧ <span class="notification-count" data-notification-count hidden>0</span></button><section class="notification-panel hidden" data-notification-panel aria-label="Notifications"><h2>Notifications</h2><div data-notification-list><p>Loading notifications…</p></div></section>';
+    right.prepend(wrap);
+    const toggle = wrap.querySelector('[data-notification-toggle]');
+    const panel = wrap.querySelector('[data-notification-panel]');
+    const list = wrap.querySelector('[data-notification-list]');
+    const count = wrap.querySelector('[data-notification-count]');
+    let known = new Set();
+    let first = true;
+    const load = async () => {
+      try {
+        const response = await CampusCareAPI.request('notifications.list', { timeoutMs: 10000 });
+        if (!response?.success || !Array.isArray(response.data)) return;
+        const items = response.data;
+        const unread = items.filter(item => !item.readAt);
+        count.textContent = unread.length > 99 ? '99+' : String(unread.length);
+        count.hidden = unread.length === 0;
+        const newItems = first ? [] : unread.filter(item => !known.has(item.notificationId));
+        newItems.forEach(item => toast(item.message, 'success'));
+        if (newItems.length) window.dispatchEvent(new CustomEvent('campuscare:refresh'));
+        known = new Set(items.map(item => item.notificationId));
+        first = false;
+        list.innerHTML = items.map(item => `<button class="notification-item ${item.readAt ? '' : 'is-unread'}" type="button" data-notification-read="${esc(item.notificationId)}" data-complaint-id="${esc(item.complaintId || '')}"><b>${esc(item.message)}</b><small>${formatDate(item.createdAt)}</small></button>`).join('') || '<p>No notifications yet.</p>';
+      } catch (_) { /* Notifications do not block the dashboard when temporarily unavailable. */ }
+    };
+    toggle.addEventListener('click', () => {
+      const open = panel.classList.toggle('hidden') === false;
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+    list.addEventListener('click', async event => {
+      const button = event.target.closest('[data-notification-read]');
+      if (!button) return;
+      try {
+        await CampusCareAPI.request('notifications.read', { method: 'PUT', pathParams: { notificationId: button.dataset.notificationRead } });
+        await load();
+        if (button.dataset.complaintId) window.dispatchEvent(new CustomEvent('campuscare:refresh'));
+      } catch (error) { toast(error.response?.message || 'Could not mark the notification as read.', 'error'); }
+    });
+    load();
+    window.setInterval(load, 20000);
+  };
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-year]').forEach(el => el.textContent = new Date().getFullYear());
     document.querySelectorAll('[data-current-date]').forEach(el => el.textContent = new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date()).toUpperCase());
     refreshUser();
+    initializeNotifications();
     // Keep modal keyboard focus inside the dialog and return it to the opener.
     const modalOpeners = new WeakMap();
     document.querySelectorAll('[data-modal]').forEach(backdrop => {
@@ -146,5 +230,5 @@
     }
     if (event.detail?.message) toast(event.detail.message, 'error');
   });
-  window.CampusCare = { esc, safeImage, read, save, all, forStudent, byId, add, update, session, setSession, clearSession, toast, formatDate, displayStatus, statusClass, statusBadge, location, updateStats, loadComplaintImages, currentUser, KEY };
+  window.CampusCare = { esc, safeImage, read, save, all, forStudent, byId, add, update, session, setSession, clearSession, toast, formatDate, displayStatus, statusClass, statusBadge, location, updateStats, loadComplaintImages, loadComplaintConversation, currentUser, KEY };
 })();

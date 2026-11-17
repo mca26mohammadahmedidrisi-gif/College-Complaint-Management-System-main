@@ -4,6 +4,7 @@ import com.college.complaint.dto.ComplaintStatusUpdateRequest;
 import com.college.complaint.dto.ComplaintRemovalRequest;
 import com.college.complaint.dto.ComplaintHistoryEntry;
 import com.college.complaint.dto.ComplaintView;
+import com.college.complaint.dto.ComplaintAssignmentRequest;
 import com.college.complaint.exception.ApiException;
 import com.college.complaint.model.Complaint;
 import com.college.complaint.model.ComplaintOwnership;
@@ -20,6 +21,7 @@ import com.college.complaint.security.ComplaintTrackingReferenceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,19 +36,25 @@ public class ComplaintWorkflowService {
     private final UserRepository users;
     private final DepartmentRepository departments;
     private final ComplaintTrackingReferenceService references;
+    private final NotificationService notifications;
+    private final JdbcTemplate jdbc;
 
     public ComplaintWorkflowService(ComplaintRepository complaints,
                                     ComplaintOwnershipRepository ownership,
                                     ComplaintStatusHistoryRepository history,
                                     UserRepository users,
                                     DepartmentRepository departments,
-                                    ComplaintTrackingReferenceService references) {
+                                    ComplaintTrackingReferenceService references,
+                                    NotificationService notifications,
+                                    JdbcTemplate jdbc) {
         this.complaints = complaints;
         this.ownership = ownership;
         this.history = history;
         this.users = users;
         this.departments = departments;
         this.references = references;
+        this.notifications = notifications;
+        this.jdbc = jdbc;
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +78,16 @@ public class ComplaintWorkflowService {
     }
 
     @Transactional(readOnly = true)
+    public ComplaintView getMineById(UUID complaintId, UUID userId) {
+        requireActiveUser(userId);
+        if (!ownership.existsByComplaint_ComplaintIdAndUser_UserId(complaintId, userId)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
+        }
+        return view(complaints.findById(complaintId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found")));
+    }
+
+    @Transactional(readOnly = true)
     public List<ComplaintView> listForHandler(UUID userId) {
         UserAccount user = requireActiveUser(userId);
         if (user.getRole() == Role.STUDENT) {
@@ -79,6 +97,10 @@ public class ComplaintWorkflowService {
                 ? complaints.findAllByOrderByCreatedAtDesc()
                 : user.getDepartmentId() == null ? List.of()
                 : complaints.findAllByDepartmentIdAndRemovedAtIsNullOrderByCreatedAtDesc(user.getDepartmentId());
+        if (user.getRole() == Role.FACULTY) {
+            visible = visible.stream().filter(complaint -> complaint.getAssignedTo() == null
+                    || userId.equals(complaint.getAssignedTo().getUserId())).toList();
+        }
         return views(visible);
     }
 
@@ -90,10 +112,7 @@ public class ComplaintWorkflowService {
         }
         Complaint complaint = complaints.findByIdForUpdate(complaintId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found"));
-        if (user.getRole() == Role.FACULTY
-                && (user.getDepartmentId() == null || !user.getDepartmentId().equals(complaint.getDepartmentId()))) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
-        }
+        requireHandlerAccess(user, complaint);
         if (complaint.isRemoved()) {
             throw new ApiException(HttpStatus.CONFLICT, "This complaint has been removed from the active queue");
         }
@@ -109,7 +128,10 @@ public class ComplaintWorkflowService {
         }
         complaint.setStatus(next);
         history.save(new ComplaintStatusHistory(complaint, previous, next,
-                remarks == null || remarks.isBlank() ? null : remarks));
+                remarks == null || remarks.isBlank() ? null : remarks, user));
+        if (next != previous || (remarks != null && !remarks.isBlank())) {
+            notifyOwner(complaint, "STATUS_UPDATE", "Your complaint status is now " + next.name().replace('_', ' ') + ".");
+        }
         return view(complaint);
     }
 
@@ -121,10 +143,7 @@ public class ComplaintWorkflowService {
         }
         Complaint complaint = complaints.findByIdForUpdate(complaintId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found"));
-        if (user.getRole() == Role.FACULTY
-                && (user.getDepartmentId() == null || !user.getDepartmentId().equals(complaint.getDepartmentId()))) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
-        }
+        requireHandlerAccess(user, complaint);
         if (complaint.isRemoved()) {
             throw new ApiException(HttpStatus.CONFLICT, "This complaint has already been removed");
         }
@@ -133,8 +152,68 @@ public class ComplaintWorkflowService {
         ComplaintStatus previous = complaint.getStatus();
         complaint.markRemoved(user, reason);
         history.save(new ComplaintStatusHistory(complaint, previous, ComplaintStatus.REJECTED,
-                "Removed from the active queue: " + reason));
+                "Removed from the active queue: " + reason, user));
+        notifyOwner(complaint, "COMPLAINT_REMOVED", "Your complaint was removed from the active faculty queue. Reason: " + reason);
         return view(complaint);
+    }
+
+    @Transactional
+    public ComplaintView assign(UUID complaintId, UUID actorId, ComplaintAssignmentRequest request) {
+        UserAccount actor = requireActiveUser(actorId);
+        if (actor.getRole() != Role.ADMIN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only an administrator can assign complaints");
+        }
+        Complaint complaint = complaints.findByIdForUpdate(complaintId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found"));
+        if (complaint.isRemoved()) throw new ApiException(HttpStatus.CONFLICT, "A removed complaint cannot be assigned");
+
+        UserAccount previousAssignee = complaint.getAssignedTo();
+        UserAccount nextAssignee = request.facultyUserId() == null ? null : users.findById(request.facultyUserId())
+                .filter(UserAccount::isActive)
+                .filter(candidate -> candidate.getRole() == Role.FACULTY)
+                .filter(candidate -> complaint.getDepartmentId() != null
+                        && complaint.getDepartmentId().equals(candidate.getDepartmentId()))
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST,
+                        "Choose an active faculty account in the complaint's department"));
+        if (previousAssignee != null && nextAssignee != null
+                && previousAssignee.getUserId().equals(nextAssignee.getUserId())) return view(complaint);
+        if (previousAssignee == null && nextAssignee == null) return view(complaint);
+
+        jdbc.update("""
+                INSERT INTO complaint_assignment_history
+                    (complaint_id, previous_assignee_user_id, new_assignee_user_id, changed_by_user_id)
+                VALUES (?, ?, ?, ?)
+                """, complaintId, previousAssignee == null ? null : previousAssignee.getUserId(),
+                nextAssignee == null ? null : nextAssignee.getUserId(), actorId);
+        complaint.setAssignedTo(nextAssignee);
+        if (nextAssignee != null && complaint.getStatus() == ComplaintStatus.PENDING) {
+            complaint.setStatus(ComplaintStatus.ASSIGNED);
+            history.save(new ComplaintStatusHistory(complaint, ComplaintStatus.PENDING, ComplaintStatus.ASSIGNED,
+                    "Assigned to " + nextAssignee.getFullName(), actor));
+        } else if (nextAssignee == null && complaint.getStatus() == ComplaintStatus.ASSIGNED) {
+            complaint.setStatus(ComplaintStatus.PENDING);
+            history.save(new ComplaintStatusHistory(complaint, ComplaintStatus.ASSIGNED, ComplaintStatus.PENDING,
+                    "Assignment cleared", actor));
+        }
+        if (nextAssignee != null) notifications.create(nextAssignee.getUserId(), complaintId, "ASSIGNMENT",
+                "A complaint has been assigned to you.");
+        notifyOwner(complaint, "ASSIGNMENT", nextAssignee == null
+                ? "The staff assignment for your complaint was updated."
+                : "A faculty member has been assigned to your complaint.");
+        return view(complaint);
+    }
+
+    private void requireHandlerAccess(UserAccount user, Complaint complaint) {
+        if (user.getRole() == Role.FACULTY && (user.getDepartmentId() == null
+                || !user.getDepartmentId().equals(complaint.getDepartmentId())
+                || (complaint.getAssignedTo() != null && !user.getUserId().equals(complaint.getAssignedTo().getUserId())))) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
+        }
+    }
+
+    private void notifyOwner(Complaint complaint, String type, String message) {
+        ownership.findByComplaint_ComplaintId(complaint.getComplaintId()).ifPresent(owner ->
+                notifications.create(owner.getUser().getUserId(), complaint.getComplaintId(), type, message));
     }
 
     private Set<ComplaintStatus> allowedTransitions(ComplaintStatus status) {
@@ -172,13 +251,18 @@ public class ComplaintWorkflowService {
                     .reduce((first, second) -> second).orElse(null);
             return new ComplaintView(complaint.getComplaintId(), references.generate(complaint.getComplaintId()),
                     complaint.getComplaintTitle(), complaint.getDescription(), complaint.getCategory().getCategoryId(),
-                    complaint.getCategory().getCategoryName(), departmentNames.get(complaint.getDepartmentId()),
+                    complaint.getCategory().getCategoryName(), complaint.getDepartmentId(), departmentNames.get(complaint.getDepartmentId()),
                     complaint.getBuilding().getBuildingName(), complaint.getFloor().getFloorName(),
                     complaint.getClassroom().getClassroomId(), complaint.getClassroom().getClassroomName(),
+                    complaint.getBuilding().getBuildingId(), complaint.getFloor().getFloorId(),
                     complaint.getStatus(), complaint.getCreatedAt(), latestRemarks,
                     complaint.isRemoved(), complaint.getRemovedAt(), complaint.getRemovalReason(),
+                    complaint.getAssignedTo() == null ? null : complaint.getAssignedTo().getUserId(),
+                    complaint.getAssignedTo() == null ? null : complaint.getAssignedTo().getFullName(),
                     events.stream().map(event -> new ComplaintHistoryEntry(event.getPreviousStatus(), event.getNewStatus(),
-                            event.getRemarks(), event.getChangedAt())).toList());
+                            event.getRemarks(), event.getChangedAt(), event.getChangedBy() == null ? "Staff" :
+                            event.getChangedBy().getRole() == Role.STUDENT ? "Student" :
+                                    event.getChangedBy().getFullName())).toList());
         }).toList();
     }
 }

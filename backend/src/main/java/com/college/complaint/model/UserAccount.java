@@ -42,6 +42,9 @@ public class UserAccount {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -97,6 +100,14 @@ public class UserAccount {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 
     public Instant getCreatedAt() {

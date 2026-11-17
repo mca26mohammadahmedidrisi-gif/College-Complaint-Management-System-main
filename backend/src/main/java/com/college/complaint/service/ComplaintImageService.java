@@ -101,7 +101,9 @@ public class ComplaintImageService {
         boolean owner = ownershipRepository.existsByComplaint_ComplaintIdAndUser_UserId(complaintId, user.getUserId());
         boolean handler = user.getRole() == com.college.complaint.model.Role.ADMIN
                 || (!complaint.isRemoved() && user.getRole() == com.college.complaint.model.Role.FACULTY
-                && user.getDepartmentId() != null && user.getDepartmentId().equals(complaint.getDepartmentId()));
+                && user.getDepartmentId() != null && user.getDepartmentId().equals(complaint.getDepartmentId())
+                && (complaint.getAssignedTo() == null
+                || user.getUserId().equals(complaint.getAssignedTo().getUserId())));
         if (!owner && !handler) throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
         Instant now = Instant.now();
         Instant expiresAt = now.plus(signedUrlLifetime);

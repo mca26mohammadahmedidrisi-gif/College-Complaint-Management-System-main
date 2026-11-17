@@ -69,6 +69,10 @@ public class Complaint {
     @JoinColumn(name = "removed_by_user_id")
     private UserAccount removedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_to_user_id")
+    private UserAccount assignedTo;
+
     @Column(name = "removal_reason", columnDefinition = "TEXT")
     private String removalReason;
 
@@ -153,6 +157,24 @@ public class Complaint {
 
     public String getRemovalReason() {
         return removalReason;
+    }
+
+    public UserAccount getAssignedTo() {
+        return assignedTo;
+    }
+
+    public void setAssignedTo(UserAccount assignedTo) {
+        this.assignedTo = assignedTo;
+    }
+
+    public void updateStudentDetails(String title, String description, ComplaintCategory category, Classroom classroom) {
+        this.complaintTitle = title;
+        this.description = description;
+        this.category = category;
+        this.departmentId = category.getDepartmentId();
+        this.classroom = classroom;
+        this.floor = classroom.getFloor();
+        this.building = classroom.getFloor().getBuilding();
     }
 
     public void markRemoved(UserAccount user, String reason) {

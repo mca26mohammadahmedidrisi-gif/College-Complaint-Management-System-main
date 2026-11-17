@@ -17,6 +17,10 @@
     'auth.student.login': { method: 'POST', path: '/api/auth/login' },
     'auth.faculty.login': { method: 'POST', path: '/api/auth/login' },
     'auth.admin.login': { method: 'POST', path: '/api/auth/login' },
+    'auth.verifyEmail': { method: 'POST', path: '/api/auth/verify-email' },
+    'auth.resendVerification': { method: 'POST', path: '/api/auth/resend-verification' },
+    'auth.forgotPassword': { method: 'POST', path: '/api/auth/forgot-password' },
+    'auth.resetPassword': { method: 'POST', path: '/api/auth/reset-password' },
     'auth.logout': { method: 'POST', path: '/api/auth/logout' },
     'admin.listUsers': { method: 'GET', path: '/api/admin/users' },
     'admin.createUser': { method: 'POST', path: '/api/admin/users' },
@@ -33,7 +37,13 @@
     'complaints.listAdmin': { method: 'GET', path: '/api/complaints/staff' },
     'complaints.updateStatus': { method: 'PUT', path: '/api/complaints/{complaintId}/status' },
     'complaints.addRemarks': { method: 'PUT', path: '/api/complaints/{complaintId}/status' },
-    'complaints.remove': { method: 'PUT', path: '/api/complaints/{complaintId}/remove' }
+    'complaints.remove': { method: 'PUT', path: '/api/complaints/{complaintId}/remove' },
+    'complaints.edit': { method: 'PUT', path: '/api/complaints/{complaintId}' },
+    'complaints.comments': { method: 'GET', path: '/api/complaints/{complaintId}/comments' },
+    'complaints.addComment': { method: 'POST', path: '/api/complaints/{complaintId}/comments' },
+    'complaints.assign': { method: 'PUT', path: '/api/complaints/{complaintId}/assignment' },
+    'notifications.list': { method: 'GET', path: '/api/notifications' },
+    'notifications.read': { method: 'PUT', path: '/api/notifications/{notificationId}/read' }
   };
   const sampleLocations = Object.freeze({
     'Main Building': Object.freeze({ 'Ground Floor': ['Room 101','Room 102','Computer Lab 103','Canteen','Dining Area','Reception','Other / Common Area'], 'First Floor': ['Room 201','Room 202','Room 203','Library','Other / Common Area'], 'Second Floor': ['Room 301','Room 302','Seminar Hall','Other / Common Area'], 'Third Floor': ['Room 401','Room 402','Lecture Hall','Other / Common Area'] }),

@@ -34,6 +34,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Instant;
 import java.util.Set;
@@ -68,6 +69,7 @@ class ComplaintSubmissionIntegrationTest {
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private JwtEncoder jwtEncoder;
     @Autowired private ComplaintTrackingReferenceService trackingReferenceService;
+    @Autowired private JdbcTemplate jdbc;
 
     private UUID categoryId;
     private UUID inactiveCategoryId;
@@ -256,6 +258,95 @@ class ComplaintSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"RESOLVED\",\"remarks\":\"\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void studentCanEditPendingComplaintAndBothSidesCanReplyWithoutRevealingStudentIdentity() throws Exception {
+        String reference = submit(student).path("data").path("trackingReference").asText();
+        UUID complaintId = trackingReferenceService.resolve(reference).orElseThrow();
+
+        mockMvc.perform(put("/api/complaints/{id}", complaintId)
+                        .header("Authorization", bearerToken(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson("Updated light report", "The lamp has stopped working again.", categoryId, classroomId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Updated light report"))
+                .andExpect(jsonPath("$.data.description").value("The lamp has stopped working again."));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM complaint_revisions WHERE complaint_id = ?", Integer.class, complaintId));
+
+        mockMvc.perform(post("/api/complaints/{id}/comments", complaintId)
+                        .header("Authorization", bearerToken(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"It is still not working today.\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.author").value("Student (anonymous)"));
+
+        mockMvc.perform(get("/api/complaints/{id}/comments", complaintId)
+                        .header("Authorization", bearerToken(faculty)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].author").value("Student (anonymous)"))
+                .andExpect(jsonPath("$.data[0].body").value("It is still not working today."));
+
+        mockMvc.perform(post("/api/complaints/{id}/comments", complaintId)
+                        .header("Authorization", bearerToken(faculty))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"The maintenance team has been notified.\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.author").value("Faculty Submitter"));
+
+        mockMvc.perform(get("/api/complaints/{id}/comments", complaintId)
+                        .header("Authorization", bearerToken(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[1].author").value("Faculty Submitter"));
+
+        mockMvc.perform(put("/api/complaints/{id}/status", complaintId)
+                        .header("Authorization", bearerToken(faculty))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_PROGRESS\",\"remarks\":\"Review started\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.history[1].changedBy").value("Faculty Submitter"));
+
+        mockMvc.perform(put("/api/complaints/{id}", complaintId)
+                        .header("Authorization", bearerToken(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson("Too late", "Already under review.", categoryId, classroomId)))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(get("/api/notifications").header("Authorization", bearerToken(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    @Test
+    void adminCanAssignComplaintToFacultyInItsDepartmentAndAssignmentRestrictsOtherFaculty() throws Exception {
+        String reference = submit(student).path("data").path("trackingReference").asText();
+        UUID complaintId = trackingReferenceService.resolve(reference).orElseThrow();
+        UserAccount otherFaculty = userRepository.save(new UserAccount(faculty.getDepartmentId(),
+                "Other Faculty", "other-faculty@test.local", "test-hash", Role.FACULTY));
+
+        mockMvc.perform(put("/api/complaints/{id}/assignment", complaintId)
+                        .header("Authorization", bearerToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"facultyUserId\":\"" + faculty.getUserId() + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ASSIGNED"))
+                .andExpect(jsonPath("$.data.assignedToUserId").value(faculty.getUserId().toString()))
+                .andExpect(jsonPath("$.data.history[1].changedBy").value("Admin Submitter"));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM complaint_assignment_history WHERE complaint_id = ?", Integer.class, complaintId));
+
+        mockMvc.perform(get("/api/complaints/staff").header("Authorization", bearerToken(faculty)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+        mockMvc.perform(get("/api/complaints/staff").header("Authorization", bearerToken(otherFaculty)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+
+        mockMvc.perform(put("/api/complaints/{id}/status", complaintId)
+                        .header("Authorization", bearerToken(otherFaculty))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_PROGRESS\",\"remarks\":\"Unauthorized assignment\"}"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

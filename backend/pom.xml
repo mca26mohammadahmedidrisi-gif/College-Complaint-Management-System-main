@@ -59,6 +59,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- SMTP delivery for email verification and password reset links. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- API documentation UI for frontend integration -->
         <dependency>
             <groupId>org.springdoc</groupId>
