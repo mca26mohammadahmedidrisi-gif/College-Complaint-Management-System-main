@@ -361,7 +361,7 @@ curl "http://localhost:8080/api/complaints/<complaint-id>/images" \
   -H "Authorization: Bearer <signed-jwt>"
 ```
 
-The response includes image IDs, detected media types, sizes, timestamps, temporary signed URLs, and their expiration times. It does not include storage paths, user IDs, names, emails, or ownership records. Only the complaint owner can upload or request image links. The same owner check applies to student, faculty, and admin accounts because this project does not yet define a separate complaint-assignment authorization rule for handlers. Requests by other users return `404` to avoid confirming that another person's complaint exists.
+The response includes image IDs, detected media types, sizes, timestamps, temporary signed URLs, and their expiration times. It does not include storage paths, user IDs, names, emails, or ownership records. Only the complaint owner can upload images. The owner, an admin, or faculty routed to the complaint's department can request image links. Requests by other users return `404` to avoid confirming that another person's complaint exists.
 
 Signed URLs are temporary bearer links: anyone who obtains one can use it until it expires. Share them only with the authorized viewer and use HTTPS in deployed environments. Bucket access remains private; the backend's service-role credential is used only in server-side calls and is never returned by the API. Owners can upload and retrieve their images. Admins and faculty in the complaint's routed department can retrieve signed image links.
 

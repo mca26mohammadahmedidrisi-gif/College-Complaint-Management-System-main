@@ -52,6 +52,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -77,6 +78,7 @@ class ComplaintImageIntegrationTest {
     @MockitoBean private SupabaseStorageClient storageClient;
 
     private UserAccount student;
+    private UserAccount otherStudent;
     private UserAccount faculty;
     private UserAccount admin;
     private UUID complaintId;
@@ -100,6 +102,8 @@ class ComplaintImageIntegrationTest {
         ComplaintCategory category = categoryRepository.save(
                 new ComplaintCategory(null, "Image Test Category", true));
         student = userRepository.save(new UserAccount(null, "Student Owner", "image-student@test.local",
+                "test-hash", Role.STUDENT));
+        otherStudent = userRepository.save(new UserAccount(null, "Other Student", "other-image-student@test.local",
                 "test-hash", Role.STUDENT));
         faculty = userRepository.save(new UserAccount(null, "Faculty Owner", "image-faculty@test.local",
                 "test-hash", Role.FACULTY));
@@ -192,7 +196,7 @@ class ComplaintImageIntegrationTest {
                         .file(pngFile("x.png")).header("Authorization", token(faculty)))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/api/complaints/{id}/images", complaintId)
-                        .header("Authorization", token(admin)))
+                        .header("Authorization", token(otherStudent)))
                 .andExpect(status().isNotFound());
         assertEquals(0, imageRepository.count());
     }
@@ -209,7 +213,7 @@ class ComplaintImageIntegrationTest {
     }
 
     @Test
-    void returnsTemporarySignedUrlsOnlyAfterOwnerAuthorization() throws Exception {
+    void returnsTemporarySignedUrlsToOwnerAndAdmin() throws Exception {
         when(storageClient.createSignedUrl(anyString(), any(Duration.class)))
                 .thenReturn("https://example.supabase.co/storage/v1/object/sign/complaint-images/token");
         mockMvc.perform(multipart("/api/complaints/{id}/images", complaintId)
@@ -228,7 +232,12 @@ class ComplaintImageIntegrationTest {
                 .andExpect(jsonPath("$.data[0].email").doesNotExist())
                 .andExpect(jsonPath("$.data[0].fullName").doesNotExist())
                 .andExpect(jsonPath("$.data[0].ownershipId").doesNotExist());
-        verify(storageClient).createSignedUrl(anyString(), eq(Duration.ofSeconds(300)));
+
+        mockMvc.perform(get("/api/complaints/{id}/images", complaintId)
+                        .header("Authorization", token(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+        verify(storageClient, times(2)).createSignedUrl(anyString(), eq(Duration.ofSeconds(300)));
     }
 
     private UUID createOwnedComplaint(UserAccount owner) {
