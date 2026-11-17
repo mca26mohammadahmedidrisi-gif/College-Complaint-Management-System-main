@@ -207,11 +207,13 @@
       sidebar?.classList.remove('open');
       document.body.classList.remove('menu-open');
       mobileMenus.forEach(button => button.setAttribute('aria-expanded', 'false'));
+      mobileMenus.forEach(button => button.setAttribute('aria-label', 'Open menu'));
     };
     mobileMenus.forEach(button => button.addEventListener('click', () => {
       const open = sidebar?.classList.toggle('open') || false;
       document.body.classList.toggle('menu-open', open);
       button.setAttribute('aria-expanded', String(open));
+      button.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
     }));
     document.addEventListener('click', event => {
       if (document.body.classList.contains('menu-open') && !sidebar?.contains(event.target)
