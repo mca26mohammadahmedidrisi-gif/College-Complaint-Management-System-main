@@ -10,6 +10,12 @@ CampusCare is a static web frontend backed by a Java 17 / Spring Boot REST API a
 - `PROJECT-AUDIT.md` — audit findings, fixes, and verification limits.
 - `DEPLOYMENT.md` — Supabase setup, API container hosting, and Vercel frontend deployment.
 
+## Student registration
+
+Student registration collects the student's stream and semester in addition to their name, email, and department. Supported streams are MSS, MCS, PGDM, and MBA; semesters are 1 or 2. The admin account directory displays the total student count and each student's stream and semester. Existing accounts remain valid with blank academic fields.
+
+For an existing Supabase database, run the latest `backend/src/main/resources/db/production-workflow-upgrade.sql` before deploying the academic-profile release.
+
 ## Database setup
 
 For a new Supabase project, run these files in Supabase SQL Editor in order:
@@ -40,7 +46,7 @@ python -m http.server 5500 --directory .\frontend
 
 Open `http://localhost:5500`. API mode is the default and targets `http://localhost:8080`. Append `?mode=mock` to a page for the tab-scoped browser preview.
 
-Run backend tests with `mvn test`; build and package with `mvn package`. GitHub Actions runs `mvn verify` and JavaScript syntax checks after the project is pushed to a GitHub repository. There is no automatic deployment workflow yet.
+Run backend tests with `mvn test`; build and package with `mvn package`. GitHub Actions runs `mvn verify` and frontend syntax checks. The frontend and backend Vercel projects are connected to this repository and deploy from the production branch.
 
 ## Privacy and workflow boundaries
 
