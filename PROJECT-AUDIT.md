@@ -18,11 +18,12 @@ Audit date: 18 November 2026
 - Added pending-only student edits with a saved pre-edit revision, a reply thread that anonymizes student authors in staff views, and administrator assignment to an active faculty member in the complaint's department.
 - Status history now records the staff actor. Persisted notifications are polled by dashboards and refresh the complaint view; optional email notices use the SMTP provider.
 - Added email verification and password reset using single-use, hashed, expiring tokens. Email-dependent paths fail clearly while SMTP is disabled; production email delivery is not active until the backend Vercel project has SMTP settings and `APP_EMAIL_ENABLED=true`.
-- Frontend JavaScript syntax checks and the Vercel frontend build pass. Backend Maven tests are present but could not be run locally because Maven is not installed; GitHub Actions must confirm them before release.
+- Frontend JavaScript syntax checks and the Vercel frontend build pass. Maven is not installed in this workspace, but GitHub Actions ran `mvn verify` successfully for commit `a2ef2e5`.
 
 ## What was changed
 
 - Connected browser login, student registration, category/location selection, complaint submission, optional JPEG/PNG upload, student complaint history/tracking, and staff status/remarks screens to the documented Spring API.
+- Follow-up: student registration now submits only the enrolled program and semester; the admin's faculty-creation department list stays dedicated to complaint-routing teams. Admin logout clears the tab session and opens the faculty sign-in form.
 - Added the account entry flow: students self-register into the database, student and faculty have direct sign-in links, and authenticated admins can create department-scoped faculty accounts from the admin dashboard. Public registration cannot assign faculty or admin roles; passwords are BCrypt-hashed by the backend.
 - Added an admin-only account directory for registered students and staff that never returns password hashes. Improved sign-out and expired-token handling, increased API wait limits for cold backend starts, and extended the default JWT lifetime to one hour.
 - Added the backend routes needed by those screens: public department reference data, owner's complaint list/detail, identity-free staff lists, and guarded status updates with status-history rows.
@@ -45,11 +46,11 @@ Individual assignees and staff actors are tracked by the current code and migrat
 
 ## Verification and limits
 
-- `node --check` passes for frontend JavaScript, and `npm run build` passes when `CAMPUSCARE_API_BASE_URL` is set to the backend HTTPS origin. These checks do not replace browser or production API checks.
-- Backend integration tests now cover student edits/replies, student anonymity in staff views, staff actor history, faculty assignment scope, persisted revisions, and the SMTP-disabled error. They require Maven/Java 17 and have not run in this workspace because `mvn` is unavailable.
-- The production API 500 remains unverified from deployment logs. The new backend maps columns and tables that must first be applied using `backend/src/main/resources/db/production-workflow-upgrade.sql`; deploying before that migration will fail Hibernate schema validation. No live Supabase migration or SMTP configuration was performed from this workspace.
-- After the migration and backend deploy, still run a real production pass for health, registration, student/faculty/admin login, complaint edit and replies, assignment, removal, notifications, password reset, and photo upload. Keep credentials local; do not paste them into chat.
-- Source changes are in the workspace. Push the release from the connected Git checkout only after applying the database migration; verify GitHub Actions before treating it as production-ready.
+- `node --check` and the Vercel frontend build pass. GitHub Actions ran the Java 17 Maven integration suite successfully for `a2ef2e5`.
+- Production checks after that deployment returned backend health `UP`, three departments, and HTTP 400 with only the invalid-email field for a registration probe that omitted `departmentId`; the probe created no account. The live frontend serves MCA/MSS stream options and the admin-to-faculty logout link.
+- The existing `production-workflow-upgrade.sql` must be applied for the already-supported `stream_name` and `semester` columns. This follow-up does not require a new SQL migration: `users.department_id` is nullable, and complaint department routing comes from the complaint category.
+- A full live workflow with newly created student/faculty accounts, complaint upload, email delivery, and reset still needs a manual pass. Keep credentials local; do not paste them into chat.
+- Follow-up code is pushed on `master` as `a2ef2e5`; GitHub CI and both Vercel project deployment checks completed successfully.
 
 ## Before using the deployed system
 
