@@ -5,6 +5,7 @@ import com.college.complaint.model.Role;
 import com.college.complaint.model.UserAccount;
 import com.college.complaint.repository.DepartmentRepository;
 import com.college.complaint.repository.UserRepository;
+import com.college.complaint.service.AuthService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,8 @@ class AuthIntegrationTest {
     private PasswordEncoder passwordEncoder;
     @Autowired
     private JwtEncoder jwtEncoder;
+    @Autowired
+    private AuthService authService;
 
     private UUID departmentId;
 
@@ -137,6 +140,12 @@ class AuthIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(Role.FACULTY, created.getRole());
         org.junit.jupiter.api.Assertions.assertEquals(departmentId, created.getDepartmentId());
         org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches(PASSWORD, created.getPasswordHash()));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson("faculty-created@example.com", "CollegePass123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("FACULTY"));
 
         mockMvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
@@ -257,6 +266,34 @@ class AuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.role").value("ADMIN"))
                 .andExpect(jsonPath("$.data.user.email").value("sakshi0072"));
+    }
+
+    @Test
+    void bootstrapSynchronizesPasswordForConfiguredAdminId() throws Exception {
+        userRepository.save(new UserAccount(
+                null, "Sakshi Admin", "sakshi0072", passwordEncoder.encode("OldTestPassword123"), Role.ADMIN));
+
+        authService.provisionBootstrapAdmin("Sakshi Admin", "sakshi0072", PASSWORD);
+
+        UserAccount configuredAdmin = userRepository.findByEmailIgnoreCase("sakshi0072").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches(PASSWORD, configuredAdmin.getPasswordHash()));
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identifier\":\"sakshi0072\",\"password\":\"CollegePass123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("ADMIN"));
+    }
+
+    @Test
+    void bootstrapCanCreateConfiguredAdminAlongsideExistingAdmin() {
+        userRepository.save(new UserAccount(
+                null, "Existing Admin", "existing-admin@example.com", passwordEncoder.encode(PASSWORD), Role.ADMIN));
+
+        authService.provisionBootstrapAdmin("Sakshi Admin", "sakshi0072", PASSWORD);
+
+        UserAccount configuredAdmin = userRepository.findByEmailIgnoreCase("sakshi0072").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(Role.ADMIN, configuredAdmin.getRole());
+        org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches(PASSWORD, configuredAdmin.getPasswordHash()));
     }
 
     @Test

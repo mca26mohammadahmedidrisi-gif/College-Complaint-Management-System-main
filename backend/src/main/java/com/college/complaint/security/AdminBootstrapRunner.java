@@ -35,13 +35,12 @@ public class AdminBootstrapRunner implements ApplicationRunner {
                     "Admin bootstrap is enabled but BOOTSTRAP_ADMIN_FULL_NAME, EMAIL, and PASSWORD are required");
         }
         try {
-            AuthDtos.RegisteredData created = authService.provisionInitialAdmin(fullName, email, password);
+            authService.provisionBootstrapAdmin(fullName, email, password);
             // Do not log credentials or the returned account data.
-            System.out.println("Initial administrator account provisioned.");
+            System.out.println("Configured bootstrap administrator is ready.");
         } catch (ApiException exception) {
-            if (exception.getStatus().value() == 409
-                    && exception.getMessage().equals("An admin account is already provisioned")) {
-                System.out.println("Administrator already exists; bootstrap skipped.");
+            if (exception.getStatus().value() == 409) {
+                System.err.println("Administrator bootstrap skipped: configured login ID is already used by a non-admin account.");
                 return;
             }
             throw exception;

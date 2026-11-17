@@ -113,6 +113,10 @@ public class UserAccount {
         return passwordHash;
     }
 
+    public void updatePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     public Role getRole() {
         return role;
     }

@@ -106,11 +106,21 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthDtos.RegisteredData provisionInitialAdmin(String fullName, String email, String password) {
-        if (userRepository.existsByRole(Role.ADMIN)) {
-            throw new ApiException(HttpStatus.CONFLICT, "An admin account is already provisioned");
+    public AuthDtos.RegisteredData provisionBootstrapAdmin(String fullName, String email, String password) {
+        String loginId = normalizeEmail(email);
+        ensurePasswordFitsBcrypt(password);
+        UserAccount existing = userRepository.findByEmailIgnoreCase(loginId).orElse(null);
+        if (existing != null) {
+            if (existing.getRole() != Role.ADMIN) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "The configured bootstrap login ID belongs to a non-admin account");
+            }
+            existing.updatePasswordHash(passwordEncoder.encode(password));
+            existing.setEmailVerified(true);
+            UserAccount saved = userRepository.save(existing);
+            return new AuthDtos.RegisteredData(saved.getUserId(), toSummary(saved), false);
         }
-        return createPrivilegedAccount(fullName, email, password, null, Role.ADMIN);
+        return createPrivilegedAccount(fullName, loginId, password, null, Role.ADMIN);
     }
 
     private AuthDtos.RegisteredData createPrivilegedAccount(

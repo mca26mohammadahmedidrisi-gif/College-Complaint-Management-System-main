@@ -93,7 +93,7 @@ BOOTSTRAP_ADMIN_EMAIL=sakshi0072
 BOOTSTRAP_ADMIN_PASSWORD=<set-privately-in-the-backend-environment>
 ```
 
-The login screen accepts a college email or an admin ID. For this testing project, set the admin ID above and enter the requested password only in the backend Vercel environment; it is never stored in source. On startup, the bootstrap creates an administrator only if no admin exists. After successful provisioning, remove those values or set `APP_BOOTSTRAP_ADMIN_ENABLED=false`; do not leave the bootstrap password in deployment configuration. The bootstrap password is hashed before database storage.
+The login screen accepts a college email or an admin ID. For this testing project, set the admin ID above and enter the requested password only in the backend Vercel environment; it is never stored in source. On startup, the bootstrap creates the configured admin ID if it is missing, or refreshes that same admin's password hash from the configured value. Other admins are left unchanged; a configured ID already owned by a non-admin is not promoted. After the intended admin can sign in, remove those variables or set `APP_BOOTSTRAP_ADMIN_ENABLED=false`; do not leave the bootstrap password in deployment configuration. The bootstrap password is hashed before database storage.
 
 ## API endpoints
 
