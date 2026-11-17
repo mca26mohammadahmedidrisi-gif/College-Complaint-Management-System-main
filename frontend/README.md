@@ -26,4 +26,6 @@ For Vercel, set `CAMPUSCARE_API_BASE_URL` in the frontend project's environment 
 
 The browser sends the signed JWT in the `Authorization` header and stores it in tab-scoped `sessionStorage`. Never put Supabase database credentials, service-role keys, or signing keys in frontend code or the frontend Vercel project; configure those only as backend project environment variables.
 
+Students register at `register.html`; the backend saves their account in PostgreSQL and assigns the `STUDENT` role. Faculty sign in at `login.html?role=faculty`. An administrator creates faculty accounts in the protected admin dashboard and assigns each account to a department. There is no public faculty signup, so visitors cannot grant themselves staff access. The administrator should share the initial password with the faculty member through a private channel.
+
 See [API-INTEGRATION-PLAN.md](API-INTEGRATION-PLAN.md) for the endpoint mapping and remaining deployment settings, and [PROJECT-AUDIT.md](PROJECT-AUDIT.md) for the source audit and verification status.

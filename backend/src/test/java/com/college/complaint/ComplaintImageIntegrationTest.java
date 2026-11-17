@@ -35,10 +35,13 @@ import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.mockito.ArgumentCaptor;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
@@ -140,6 +143,21 @@ class ComplaintImageIntegrationTest {
         assertTrue(saved.getStoragePath().matches(complaintId + "/[0-9a-f-]{36}\\.png"));
         assertFalse(saved.getStoragePath().contains("private-name"));
         verify(storageClient).upload(eq(saved.getStoragePath()), any(byte[].class), eq("image/png"));
+    }
+
+    @Test
+    void stripsExifMetadataBeforeSendingPhotoToStorage() throws Exception {
+        byte[] imageWithExif = jpegWithExif();
+        mockMvc.perform(multipart("/api/complaints/{id}/images", complaintId)
+                        .file(new MockMultipartFile("file", "camera-photo.jpg", "image/jpeg", imageWithExif))
+                        .header("Authorization", token(student)))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<byte[]> uploadedBytes = ArgumentCaptor.forClass(byte[].class);
+        verify(storageClient).upload(anyString(), uploadedBytes.capture(), eq("image/jpeg"));
+        byte[] storedImage = uploadedBytes.getValue();
+        assertFalse(new String(storedImage, StandardCharsets.ISO_8859_1).contains("Exif"));
+        assertTrue(ImageIO.read(new ByteArrayInputStream(storedImage)) != null);
     }
 
     @Test
@@ -260,6 +278,28 @@ class ComplaintImageIntegrationTest {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ImageIO.write(image, "png", output);
         return output.toByteArray();
+    }
+
+    private byte[] jpegWithExif() throws Exception {
+        BufferedImage image = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream jpegOutput = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpeg", jpegOutput);
+        byte[] jpeg = jpegOutput.toByteArray();
+
+        ByteArrayOutputStream exif = new ByteArrayOutputStream();
+        exif.write("Exif\0\0".getBytes(StandardCharsets.ISO_8859_1));
+        exif.write(new byte[]{'I', 'I', 42, 0, 8, 0, 0, 0, 0, 0, 0, 0});
+        byte[] metadata = exif.toByteArray();
+        int segmentLength = metadata.length + 2;
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        result.write(jpeg, 0, 2);
+        result.write(0xFF);
+        result.write(0xE1);
+        result.write((segmentLength >> 8) & 0xFF);
+        result.write(segmentLength & 0xFF);
+        result.write(metadata);
+        result.write(jpeg, 2, jpeg.length - 2);
+        return result.toByteArray();
     }
 
     private String token(UserAccount user) {

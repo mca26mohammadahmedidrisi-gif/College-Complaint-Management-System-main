@@ -6,6 +6,7 @@ import com.college.complaint.dto.ComplaintImageUploadedResponse;
 import com.college.complaint.dto.ComplaintSubmissionRequest;
 import com.college.complaint.dto.ComplaintSubmissionResponse;
 import com.college.complaint.dto.ComplaintStatusUpdateRequest;
+import com.college.complaint.dto.ComplaintRemovalRequest;
 import com.college.complaint.dto.ComplaintView;
 import com.college.complaint.exception.ApiException;
 import com.college.complaint.service.ComplaintService;
@@ -94,6 +95,14 @@ public class ComplaintController {
                                                     Authentication authentication) {
         return ApiResponse.success("Complaint updated successfully",
                 workflowService.update(complaintId, authenticatedUserId(authentication), request));
+    }
+
+    @PutMapping("/{complaintId}/remove")
+    public ApiResponse<ComplaintView> remove(@PathVariable UUID complaintId,
+                                              @Valid @RequestBody ComplaintRemovalRequest request,
+                                              Authentication authentication) {
+        return ApiResponse.success("Complaint removed from the active queue",
+                workflowService.remove(complaintId, authenticatedUserId(authentication), request));
     }
 
     @PostMapping(value = "/{complaintId}/images", consumes = "multipart/form-data")

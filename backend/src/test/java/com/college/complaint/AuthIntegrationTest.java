@@ -88,6 +88,47 @@ class AuthIntegrationTest {
                                 """.formatted(departmentId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","departmentId":"%s","role":"FACULTY"}
+                                """.formatted(departmentId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
+    }
+
+    @Test
+    void adminCanProvisionFacultyAccountAndItIsSavedWithDepartmentAndBcryptHash() throws Exception {
+        UserAccount administrator = userRepository.save(new UserAccount(
+                null, "Admin User", "provision-admin@example.com", passwordEncoder.encode(PASSWORD), Role.ADMIN));
+        String adminToken = tokenFor(administrator);
+
+        mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Faculty Member","email":"faculty-created@example.com","password":"CollegePass123","departmentId":"%s","role":"FACULTY"}
+                                """.formatted(departmentId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.user.role").value("FACULTY"))
+                .andExpect(jsonPath("$.data.user.passwordHash").doesNotExist());
+
+        UserAccount created = userRepository.findByEmailIgnoreCase("faculty-created@example.com").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(Role.FACULTY, created.getRole());
+        org.junit.jupiter.api.Assertions.assertEquals(departmentId, created.getDepartmentId());
+        org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches(PASSWORD, created.getPasswordHash()));
+
+        mockMvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.data[1].passwordHash").doesNotExist());
+
+        UserAccount student = userRepository.save(new UserAccount(
+                departmentId, "Student User", "directory-student@example.com", passwordEncoder.encode(PASSWORD), Role.STUDENT));
+        mockMvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + tokenFor(student)))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -223,6 +264,19 @@ class AuthIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         JsonNode root = objectMapper.readTree(response);
         return root.path("data").path("token").asText();
+    }
+
+    private String tokenFor(UserAccount user) {
+        Instant now = Instant.now();
+        return jwtEncoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(MacAlgorithm.HS256).build(),
+                JwtClaimsSet.builder()
+                        .issuer("college-complaint-management")
+                        .subject(user.getUserId().toString())
+                        .issuedAt(now)
+                        .expiresAt(now.plusSeconds(300))
+                        .claim("roles", Set.of(user.getRole().name()))
+                        .build())).getTokenValue();
     }
 
     private String tokenWithTimes(Instant issuedAt, Instant expiresAt, Role role) {

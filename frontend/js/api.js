@@ -195,7 +195,9 @@
       return data;
     } catch (cause) {
       const error = cause instanceof ApiError ? cause : new ApiError(
-        cause?.name === 'AbortError' || cause?.name === 'TimeoutError' ? 'The request was cancelled or timed out.' : 'The server could not be reached.',
+        cause?.name === 'AbortError' || cause?.name === 'TimeoutError'
+          ? 'The server is taking longer than expected. Check that the backend deployment is Ready, then try again.'
+          : 'The server could not be reached. Check the backend URL and connection.',
         { operation, kind: cause?.name === 'AbortError' || cause?.name === 'TimeoutError' ? 'aborted' : 'network_error', cause }
       );
       if (!error.operation) error.operation = operation;
@@ -272,7 +274,8 @@
       listFaculty: operation('complaints.listFaculty'),
       listAdmin: operation('complaints.listAdmin'),
       updateStatus: operation('complaints.updateStatus'),
-      addRemarks: operation('complaints.addRemarks')
+      addRemarks: operation('complaints.addRemarks'),
+      remove: operation('complaints.remove')
     }),
     locations: Object.freeze({
       buildings: operation('locations.buildings'),

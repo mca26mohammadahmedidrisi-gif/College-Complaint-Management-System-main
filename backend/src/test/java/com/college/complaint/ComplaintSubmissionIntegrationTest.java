@@ -5,6 +5,7 @@ import com.college.complaint.model.Classroom;
 import com.college.complaint.model.Complaint;
 import com.college.complaint.model.ComplaintCategory;
 import com.college.complaint.model.ComplaintStatus;
+import com.college.complaint.model.Department;
 import com.college.complaint.model.Floor;
 import com.college.complaint.model.Role;
 import com.college.complaint.model.UserAccount;
@@ -15,6 +16,7 @@ import com.college.complaint.repository.ComplaintImageRepository;
 import com.college.complaint.repository.ComplaintOwnershipRepository;
 import com.college.complaint.repository.ComplaintRepository;
 import com.college.complaint.repository.ComplaintStatusHistoryRepository;
+import com.college.complaint.repository.DepartmentRepository;
 import com.college.complaint.repository.FloorRepository;
 import com.college.complaint.repository.UserRepository;
 import com.college.complaint.security.ComplaintTrackingReferenceService;
@@ -63,6 +65,7 @@ class ComplaintSubmissionIntegrationTest {
     @Autowired private ComplaintImageRepository imageRepository;
     @Autowired private ComplaintOwnershipRepository ownershipRepository;
     @Autowired private ComplaintStatusHistoryRepository historyRepository;
+    @Autowired private DepartmentRepository departmentRepository;
     @Autowired private JwtEncoder jwtEncoder;
     @Autowired private ComplaintTrackingReferenceService trackingReferenceService;
 
@@ -81,13 +84,16 @@ class ComplaintSubmissionIntegrationTest {
         buildingRepository.deleteAll();
         categoryRepository.deleteAll();
         userRepository.deleteAll();
+        departmentRepository.deleteAll();
+
+        Department department = departmentRepository.save(new Department(UUID.randomUUID(), "Complaint Test Department"));
 
         Building building = buildingRepository.save(new Building("Complaint Test Building"));
         Floor floor = floorRepository.save(new Floor(building, 0, "Ground Floor"));
         Classroom classroom = classroomRepository.save(new Classroom(floor, "T-101", "Test Room"));
         classroomId = classroom.getClassroomId();
         ComplaintCategory category = categoryRepository.save(
-                new ComplaintCategory(null, "Test Facilities", true));
+                new ComplaintCategory(department.getDepartmentId(), "Test Facilities", true));
         categoryId = category.getCategoryId();
         ComplaintCategory inactive = categoryRepository.save(
                 new ComplaintCategory(null, "Inactive Category", false));
@@ -95,7 +101,7 @@ class ComplaintSubmissionIntegrationTest {
 
         student = userRepository.save(new UserAccount(null, "Student Submitter", "student-complaint@test.local",
                 "test-hash", Role.STUDENT));
-        faculty = userRepository.save(new UserAccount(null, "Faculty Submitter", "faculty-complaint@test.local",
+        faculty = userRepository.save(new UserAccount(department.getDepartmentId(), "Faculty Submitter", "faculty-complaint@test.local",
                 "test-hash", Role.FACULTY));
         admin = userRepository.save(new UserAccount(null, "Admin Submitter", "admin-complaint@test.local",
                 "test-hash", Role.ADMIN));
@@ -250,6 +256,58 @@ class ComplaintSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"RESOLVED\",\"remarks\":\"\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void facultyCanSoftRemoveDepartmentComplaintAndStudentCanSeeTheReason() throws Exception {
+        String reference = submit(student).path("data").path("trackingReference").asText();
+        UUID complaintId = trackingReferenceService.resolve(reference).orElseThrow();
+
+        mockMvc.perform(put("/api/complaints/{id}/remove", complaintId)
+                        .header("Authorization", bearerToken(faculty))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Abusive language; review this submission\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.removed").value(true))
+                .andExpect(jsonPath("$.data.status").value("REJECTED"))
+                .andExpect(jsonPath("$.data.removalReason").value("Abusive language; review this submission"))
+                .andExpect(jsonPath("$.data.userId").doesNotExist())
+                .andExpect(jsonPath("$.data.email").doesNotExist());
+
+        assertTrue(complaintRepository.existsById(complaintId));
+        assertTrue(ownershipRepository.existsByComplaint_ComplaintIdAndUser_UserId(complaintId, student.getUserId()));
+        assertEquals(2, historyRepository.findAllByComplaint_ComplaintIdInOrderByChangedAtAsc(Set.of(complaintId)).size());
+
+        mockMvc.perform(get("/api/complaints/mine/{reference}", reference)
+                        .header("Authorization", bearerToken(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.removed").value(true))
+                .andExpect(jsonPath("$.data.status").value("REJECTED"))
+                .andExpect(jsonPath("$.data.removalReason").value("Abusive language; review this submission"));
+
+        mockMvc.perform(get("/api/complaints/staff").header("Authorization", bearerToken(faculty)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void studentsCannotRemoveComplaintsAndRemovalRequiresAReason() throws Exception {
+        String reference = submit(student).path("data").path("trackingReference").asText();
+        UUID complaintId = trackingReferenceService.resolve(reference).orElseThrow();
+
+        mockMvc.perform(put("/api/complaints/{id}/remove", complaintId)
+                        .header("Authorization", bearerToken(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Duplicate\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/complaints/{id}/remove", complaintId)
+                        .header("Authorization", bearerToken(faculty))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\" \"}"))
+                .andExpect(status().isBadRequest());
+
+        assertFalse(complaintRepository.findById(complaintId).orElseThrow().isRemoved());
     }
 
     @Test

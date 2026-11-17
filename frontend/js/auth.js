@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const roleInput = document.querySelector('input[name="role"]'); if (roleInput) roleInput.value = button.dataset.role;
   }));
+  const initialRole = new URLSearchParams(location.search).get('role')?.toLowerCase();
+  if (['student', 'faculty', 'admin'].includes(initialRole)) {
+    document.querySelector(`.role-option[data-role="${initialRole}"]`)?.click();
+  }
 
   const departmentSelect = document.getElementById('departmentId');
   if (departmentSelect && !apiMode) {
@@ -68,11 +72,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const login = document.getElementById('login-form');
+  if (login && new URLSearchParams(location.search).get('reason') === 'session-expired') {
+    const notice = login.querySelector('[data-form-notice]');
+    notice.className = 'form-notice error-text';
+    notice.textContent = 'Your session expired. Sign in again to continue.';
+  }
   if (login) login.addEventListener('submit', async event => {
     event.preventDefault();
     const notice = login.querySelector('[data-form-notice]'); const data = new FormData(login);
     if (!login.reportValidity()) return;
     const role = String(data.get('role') || 'student').toLowerCase();
+    CampusCare.clearSession();
     if (!apiMode) {
       const email = String(data.get('email') || '');
       const name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || `${role[0].toUpperCase()}${role.slice(1)}`;
@@ -81,10 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => location.href = ({ student: 'student-dashboard.html', faculty: 'faculty-dashboard.html', admin: 'admin-dashboard.html' })[role], 450);
       return;
     }
-    notice.textContent = 'Signing in…';
+    notice.textContent = 'Connecting to the college system…';
+    const slowNotice = setTimeout(() => {
+      if (login.isConnected) notice.textContent = 'The backend is taking longer to wake up. Please keep this page open…';
+    }, 8000);
     try {
       const response = await CampusCareAPI.request(`auth.${role}.login`, {
-        method: 'POST', body: { email: String(data.get('email')).trim(), password: String(data.get('password')) }, loadingTarget: login.querySelector('[type="submit"]')
+        method: 'POST', timeoutMs: 60000,
+        body: { email: String(data.get('email')).trim(), password: String(data.get('password')) }, loadingTarget: login.querySelector('[type="submit"]')
       });
       const result = response?.data;
       if (!result?.token || !result?.user?.role) throw new Error('The server returned an incomplete login response.');
@@ -93,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
       notice.className = 'form-notice success-text'; notice.textContent = 'Sign-in successful. Opening your workspace…';
       setTimeout(() => location.href = ({ student: 'student-dashboard.html', faculty: 'faculty-dashboard.html', admin: 'admin-dashboard.html' })[role], 250);
     } catch (error) { showError(notice, error); }
+    finally { clearTimeout(slowNotice); }
   });
 
   const register = document.getElementById('register-form');
@@ -106,7 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
     notice.textContent = 'Creating your account…';
     try {
       await CampusCareAPI.request('auth.student.register', {
-        method: 'POST', body: { fullName: String(data.get('fullName')).trim(), email: String(data.get('email')).trim(), password: String(data.get('password')), departmentId }, loadingTarget: register.querySelector('[type="submit"]')
+        method: 'POST', timeoutMs: 60000,
+        body: { fullName: String(data.get('fullName')).trim(), email: String(data.get('email')).trim(), password: String(data.get('password')), departmentId }, loadingTarget: register.querySelector('[type="submit"]')
       });
       notice.className = 'form-notice success-text'; notice.textContent = 'Account created. Sign in with your new account.';
       setTimeout(() => location.href = 'login.html', 700);

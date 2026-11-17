@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const load = async () => {
       try { const response = await CampusCareAPI.request('complaints.listMine'); if (!response?.success) throw new Error(response?.message || 'Could not load your complaints.'); render(response.data || []); }
-      catch (error) { CampusCare.toast(error.response?.message || error.message, 'error'); }
+      catch (error) { if (error.status !== 401) CampusCare.toast(error.response?.message || error.message, 'error'); }
     };
     load(); window.addEventListener('campuscare:refresh', load); return;
   }

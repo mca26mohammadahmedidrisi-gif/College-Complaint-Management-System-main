@@ -17,6 +17,8 @@ For a new Supabase project, run these files in Supabase SQL Editor in order:
 1. `backend/src/main/resources/db/schema.sql`
 2. `backend/src/main/resources/db/seed.sql`
 
+The repeatable seed provides seven campus levels across Main Building, Science Building, and Sports Complex. It includes a canteen, dining area, labs, library, gym, sports hall, courts, sports ground, and common-area choices. Adjust the seed names to match the college's actual floor plan before applying it.
+
 For the existing database described in the project brief, do not rerun `schema.sql`. Run `enable-rls.sql` once, rerun the idempotent `seed.sql` to add common-area locations, then run `repair-complaint-routing.sql` once if existing complaints have a null `department_id`. The repair only fills null routing and preserves non-null values.
 
 ## Local development

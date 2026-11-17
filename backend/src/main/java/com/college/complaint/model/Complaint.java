@@ -62,6 +62,16 @@ public class Complaint {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "removed_at")
+    private Instant removedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "removed_by_user_id")
+    private UserAccount removedBy;
+
+    @Column(name = "removal_reason", columnDefinition = "TEXT")
+    private String removalReason;
+
     protected Complaint() {
     }
 
@@ -131,5 +141,27 @@ public class Complaint {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isRemoved() {
+        return removedAt != null;
+    }
+
+    public Instant getRemovedAt() {
+        return removedAt;
+    }
+
+    public String getRemovalReason() {
+        return removalReason;
+    }
+
+    public void markRemoved(UserAccount user, String reason) {
+        if (isRemoved()) {
+            throw new IllegalStateException("Complaint has already been removed");
+        }
+        this.removedAt = Instant.now();
+        this.removedBy = user;
+        this.removalReason = reason;
+        this.status = ComplaintStatus.REJECTED;
     }
 }

@@ -4,8 +4,11 @@
   const isLocal = window.location.protocol === 'file:' || hostname === 'localhost' || hostname === '127.0.0.1';
   const environment = isLocal ? 'development' : 'production';
   const queryMode = new URLSearchParams(window.location.search).get('mode');
-  if (queryMode === 'mock' || queryMode === 'api') sessionStorage.setItem('campuscare.mode', queryMode);
-  const selectedMode = queryMode || sessionStorage.getItem('campuscare.mode') || 'api';
+  const storedMode = isLocal ? sessionStorage.getItem('campuscare.mode') : null;
+  if (isLocal && (queryMode === 'mock' || queryMode === 'api')) sessionStorage.setItem('campuscare.mode', queryMode);
+  // Production must never silently fall back to browser-only mock storage because of an old tab setting.
+  if (!isLocal) sessionStorage.removeItem('campuscare.mode');
+  const selectedMode = isLocal ? queryMode || storedMode || 'api' : 'api';
   const productionApiUrl = window.CAMPUSCARE_API_BASE_URL || '';
   const apiBaseUrl = environment === 'development' ? 'http://localhost:8080' : productionApiUrl;
   const endpoints = {
@@ -15,6 +18,8 @@
     'auth.faculty.login': { method: 'POST', path: '/api/auth/login' },
     'auth.admin.login': { method: 'POST', path: '/api/auth/login' },
     'auth.logout': { method: 'POST', path: '/api/auth/logout' },
+    'admin.listUsers': { method: 'GET', path: '/api/admin/users' },
+    'admin.createUser': { method: 'POST', path: '/api/admin/users' },
     'locations.buildings': { method: 'GET', path: '/api/locations/buildings' },
     'locations.floors': { method: 'GET', path: '/api/locations/buildings/{buildingId}/floors' },
     'locations.rooms': { method: 'GET', path: '/api/locations/floors/{floorId}/classrooms' },
@@ -27,19 +32,20 @@
     'complaints.listFaculty': { method: 'GET', path: '/api/complaints/staff' },
     'complaints.listAdmin': { method: 'GET', path: '/api/complaints/staff' },
     'complaints.updateStatus': { method: 'PUT', path: '/api/complaints/{complaintId}/status' },
-    'complaints.addRemarks': { method: 'PUT', path: '/api/complaints/{complaintId}/status' }
+    'complaints.addRemarks': { method: 'PUT', path: '/api/complaints/{complaintId}/status' },
+    'complaints.remove': { method: 'PUT', path: '/api/complaints/{complaintId}/remove' }
   };
   const sampleLocations = Object.freeze({
-    'Main Academic Block': Object.freeze({ 'Ground Floor': ['Room 001','Room 002','Other / Common Area'], 'First Floor': ['Room 101','Room 102','Room 103','Other / Common Area'], 'Second Floor': ['Room 201','Room 202','Room 204','Other / Common Area'] }),
-    'Science Block': Object.freeze({ 'Ground Floor': ['Physics Lab','Chemistry Lab','Other / Common Area'], 'First Floor': ['Biology Lab','Room 101','Other / Common Area'], 'Second Floor': ['Room 201','Room 202','Other / Common Area'] }),
-    'Management Block': Object.freeze({ 'Ground Floor': ['Reception','Seminar Hall','Other / Common Area'], 'First Floor': ['Room 101','Room 102','Other / Common Area'] })
+    'Main Building': Object.freeze({ 'Ground Floor': ['Room 101','Room 102','Computer Lab 103','Canteen','Dining Area','Reception','Other / Common Area'], 'First Floor': ['Room 201','Room 202','Room 203','Library','Other / Common Area'], 'Second Floor': ['Room 301','Room 302','Seminar Hall','Other / Common Area'], 'Third Floor': ['Room 401','Room 402','Lecture Hall','Other / Common Area'] }),
+    'Science Building': Object.freeze({ 'Ground Floor': ['Science Lab 101','Science Lab 102','Other / Common Area'], 'First Floor': ['Biology Lab','Research Lab','Other / Common Area'] }),
+    'Sports Complex': Object.freeze({ 'Ground Level': ['Gymnasium','Indoor Sports Hall','Badminton Court','Basketball Court','Sports Ground / Field','Changing Room','Other Sports Area'] })
   });
 
   window.CAMPUSCARE_CONFIG = Object.freeze({
     environment,
     mode: selectedMode === 'mock' ? 'mock' : 'api',
     apiBaseUrl,
-    request: Object.freeze({ timeoutMs: 15000, credentials: 'same-origin' }),
+    request: Object.freeze({ timeoutMs: 30000, credentials: 'same-origin' }),
     auth: Object.freeze({ headerName: 'Authorization', scheme: 'Bearer' }),
     endpoints: Object.freeze(endpoints),
     sampleLocations

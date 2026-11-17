@@ -4,10 +4,12 @@ import com.college.complaint.exception.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
 
@@ -38,7 +40,33 @@ public class ImageContentValidator {
         }
 
         verifyDecodableImage(bytes, detectedType);
-        return new ValidatedImage(detectedType, detectedType.equals("image/png") ? "png" : "jpg", bytes.length);
+        byte[] sanitizedBytes = stripMetadata(bytes, detectedType);
+        if (sanitizedBytes.length == 0 || sanitizedBytes.length > MAX_FILE_SIZE_BYTES) {
+            throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE,
+                    "The processed image must not exceed 5 MB");
+        }
+        return new ValidatedImage(detectedType, detectedType.equals("image/png") ? "png" : "jpg",
+                sanitizedBytes.length, sanitizedBytes);
+    }
+
+    /** Re-encode pixels without copying EXIF, GPS, camera, or other embedded metadata. */
+    private byte[] stripMetadata(byte[] bytes, String detectedType) {
+        String format = detectedType.equals("image/png") ? "png" : "jpeg";
+        try {
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (image == null) {
+                throw new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Image file content is invalid");
+            }
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            if (!ImageIO.write(image, format, output)) {
+                throw new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Image format could not be processed");
+            }
+            return output.toByteArray();
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (IOException | RuntimeException exception) {
+            throw new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Image file content is invalid");
+        }
     }
 
     private void verifyDecodableImage(byte[] bytes, String detectedType) {
@@ -94,5 +122,5 @@ public class ImageContentValidator {
         }
     }
 
-    public record ValidatedImage(String contentType, String extension, long sizeBytes) { }
+    public record ValidatedImage(String contentType, String extension, long sizeBytes, byte[] sanitizedBytes) { }
 }

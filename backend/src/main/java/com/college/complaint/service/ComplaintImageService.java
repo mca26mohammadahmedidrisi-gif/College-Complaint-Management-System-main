@@ -78,7 +78,7 @@ public class ComplaintImageService {
 
         // No client filename is used: the path consists only of a UUID and fixed extension.
         String objectPath = complaintId + "/" + UUID.randomUUID() + "." + validated.extension();
-        storageClient.upload(objectPath, bytes, validated.contentType());
+        storageClient.upload(objectPath, validated.sanitizedBytes(), validated.contentType());
 
         try {
             ComplaintImage saved = imageRepository.saveAndFlush(new ComplaintImage(
@@ -100,7 +100,7 @@ public class ComplaintImageService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found"));
         boolean owner = ownershipRepository.existsByComplaint_ComplaintIdAndUser_UserId(complaintId, user.getUserId());
         boolean handler = user.getRole() == com.college.complaint.model.Role.ADMIN
-                || (user.getRole() == com.college.complaint.model.Role.FACULTY
+                || (!complaint.isRemoved() && user.getRole() == com.college.complaint.model.Role.FACULTY
                 && user.getDepartmentId() != null && user.getDepartmentId().equals(complaint.getDepartmentId()));
         if (!owner && !handler) throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
         Instant now = Instant.now();
@@ -118,6 +118,9 @@ public class ComplaintImageService {
                 .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN, "This account cannot access the complaint"));
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found"));
+        if (complaint.isRemoved()) {
+            throw new ApiException(HttpStatus.CONFLICT, "This complaint has been removed from the active queue");
+        }
         if (!ownershipRepository.existsByComplaint_ComplaintIdAndUser_UserId(complaintId, user.getUserId())) {
             // Hide whether another person's complaint exists.
             throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");

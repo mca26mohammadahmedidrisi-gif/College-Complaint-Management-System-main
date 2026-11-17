@@ -1,6 +1,7 @@
 package com.college.complaint.service;
 
 import com.college.complaint.dto.ComplaintStatusUpdateRequest;
+import com.college.complaint.dto.ComplaintRemovalRequest;
 import com.college.complaint.dto.ComplaintHistoryEntry;
 import com.college.complaint.dto.ComplaintView;
 import com.college.complaint.exception.ApiException;
@@ -77,7 +78,7 @@ public class ComplaintWorkflowService {
         List<Complaint> visible = user.getRole() == Role.ADMIN
                 ? complaints.findAllByOrderByCreatedAtDesc()
                 : user.getDepartmentId() == null ? List.of()
-                : complaints.findAllByDepartmentIdOrderByCreatedAtDesc(user.getDepartmentId());
+                : complaints.findAllByDepartmentIdAndRemovedAtIsNullOrderByCreatedAtDesc(user.getDepartmentId());
         return views(visible);
     }
 
@@ -93,6 +94,9 @@ public class ComplaintWorkflowService {
                 && (user.getDepartmentId() == null || !user.getDepartmentId().equals(complaint.getDepartmentId()))) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
         }
+        if (complaint.isRemoved()) {
+            throw new ApiException(HttpStatus.CONFLICT, "This complaint has been removed from the active queue");
+        }
 
         ComplaintStatus previous = complaint.getStatus();
         ComplaintStatus next = request.status();
@@ -106,6 +110,30 @@ public class ComplaintWorkflowService {
         complaint.setStatus(next);
         history.save(new ComplaintStatusHistory(complaint, previous, next,
                 remarks == null || remarks.isBlank() ? null : remarks));
+        return view(complaint);
+    }
+
+    @Transactional
+    public ComplaintView remove(UUID complaintId, UUID userId, ComplaintRemovalRequest request) {
+        UserAccount user = requireActiveUser(userId);
+        if (user.getRole() == Role.STUDENT) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only complaint handlers can remove complaints");
+        }
+        Complaint complaint = complaints.findByIdForUpdate(complaintId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Complaint not found"));
+        if (user.getRole() == Role.FACULTY
+                && (user.getDepartmentId() == null || !user.getDepartmentId().equals(complaint.getDepartmentId()))) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Complaint not found");
+        }
+        if (complaint.isRemoved()) {
+            throw new ApiException(HttpStatus.CONFLICT, "This complaint has already been removed");
+        }
+
+        String reason = request.reason().trim();
+        ComplaintStatus previous = complaint.getStatus();
+        complaint.markRemoved(user, reason);
+        history.save(new ComplaintStatusHistory(complaint, previous, ComplaintStatus.REJECTED,
+                "Removed from the active queue: " + reason));
         return view(complaint);
     }
 
@@ -148,6 +176,7 @@ public class ComplaintWorkflowService {
                     complaint.getBuilding().getBuildingName(), complaint.getFloor().getFloorName(),
                     complaint.getClassroom().getClassroomId(), complaint.getClassroom().getClassroomName(),
                     complaint.getStatus(), complaint.getCreatedAt(), latestRemarks,
+                    complaint.isRemoved(), complaint.getRemovedAt(), complaint.getRemovalReason(),
                     events.stream().map(event -> new ComplaintHistoryEntry(event.getPreviousStatus(), event.getNewStatus(),
                             event.getRemarks(), event.getChangedAt())).toList());
         }).toList();

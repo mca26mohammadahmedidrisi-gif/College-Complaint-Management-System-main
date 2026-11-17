@@ -120,8 +120,10 @@
     document.querySelectorAll('[data-logout]').forEach(link => link.addEventListener('click', async event => {
       if (window.CAMPUSCARE_CONFIG.mode !== 'api') { clearSession(); return; }
       event.preventDefault();
-      try { await CampusCareAPI.request('auth.logout', { method: 'POST' }); } catch (_) { /* Logout remains local even if the server is unavailable. */ }
-      clearSession(); location.href = link.href;
+      // The API uses stateless short-lived JWTs and logout does not revoke them.
+      // Clear the browser credential before navigating; an expired token must never block sign-out.
+      clearSession();
+      location.replace(link.href);
     }));
     document.querySelectorAll('[data-refresh]').forEach(button => button.addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('campuscare:refresh'));
@@ -130,12 +132,16 @@
     document.querySelectorAll('[data-notice]').forEach(link => link.addEventListener('click', event => { event.preventDefault(); toast(link.dataset.notice); }));
     document.querySelectorAll('[data-profile-link]').forEach(link => link.addEventListener('click', event => { event.preventDefault(); toast('Profile management will connect when the backend supports it.'); }));
   });
+  let redirectingForExpiredSession = false;
   window.addEventListener('campuscare:api-error', event => {
+    if (event.detail?.operation === 'auth.logout') return;
     if (event.detail?.status === 401 && !String(event.detail.operation || '').endsWith('.login')
         && event.detail.operation !== 'auth.logout' && session()?.token) {
       clearSession();
-      toast('Your session expired. Sign in again.', 'error');
-      if (!['login.html', 'register.html'].includes(location.pathname.split('/').pop())) location.href = 'login.html';
+      if (!redirectingForExpiredSession && !['login.html', 'register.html'].includes(location.pathname.split('/').pop())) {
+        redirectingForExpiredSession = true;
+        location.replace('login.html?reason=session-expired');
+      }
       return;
     }
     if (event.detail?.message) toast(event.detail.message, 'error');

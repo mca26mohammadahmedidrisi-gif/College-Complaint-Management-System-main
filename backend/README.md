@@ -9,9 +9,9 @@ The database is Supabase PostgreSQL. Initialize a new project in Supabase SQL Ed
 1. `src/main/resources/db/schema.sql`
 2. `src/main/resources/db/seed.sql`
 
-For a project where the schema was already created, do not rerun `schema.sql`. Run `src/main/resources/db/enable-rls.sql` once, then rerun the idempotent `seed.sql`. If existing complaints have a null `department_id`, run `src/main/resources/db/repair-complaint-routing.sql`; it fills only null values and preserves any existing non-null routing. No browser-facing RLS policies are created; application access goes through the backend.
+For a project where the schema was already created, do not rerun `schema.sql`. Run `src/main/resources/db/enable-rls.sql` once, then rerun the idempotent `seed.sql`. If existing complaints have a null `department_id`, run `src/main/resources/db/repair-complaint-routing.sql`; it fills only null values and preserves any existing non-null routing. Before deploying the moderation code, run `src/main/resources/db/soft-remove-complaints.sql` once; it adds nullable audit columns and is safe to rerun. No browser-facing RLS policies are created; application access goes through the backend.
 
-`schema.sql` creates the tables and indexes and is intended for a new/empty schema. It is not a migration and is not safe to run twice without planning a migration. The seed file can be rerun; it uses unique keys to avoid duplicate reference rows. Hibernate is configured to validate mapped tables and never create or alter the database schema.
+`schema.sql` creates the tables and indexes and is intended for a new/empty schema. It is not a migration and is not safe to run twice without planning a migration. The seed file can be rerun; it uses unique keys to avoid duplicate reference rows. It adds seven configured campus levels across Main Building, Science Building, and Sports Complex, including canteen, labs, library, gym, courts, sports ground, and common-area locations. Review those names against the actual campus layout before running it. Hibernate is configured to validate mapped tables and never create or alter the database schema.
 
 Set connection variables in the local shell or backend hosting environment. Do not commit passwords, `.env` files, or Supabase service-role keys.
 
@@ -61,7 +61,7 @@ Configure:
 ```text
 JWT_SECRET_BASE64=<generated-base64-secret>
 JWT_ISSUER=college-complaint-management
-JWT_EXPIRATION_SECONDS=900
+JWT_EXPIRATION_SECONDS=3600
 ```
 
 Complaint tracking references use a separate HMAC signing key. Generate an independent key using the same command and configure it as `COMPLAINT_TRACKING_SECRET_BASE64`:
@@ -72,9 +72,13 @@ COMPLAINT_TRACKING_SECRET_BASE64=<another-generated-base64-secret>
 
 Do not reuse the JWT key. Rotating this key invalidates previously issued tracking references; arrange rotation as a planned migration if references must remain usable.
 
-Never commit the signing key or expose it to the frontend. The default token lifetime is 15 minutes. JWTs contain a user UUID subject and role claim, but no email or name. Spring Security validates the signature, issuer, and expiration on protected API requests.
+Never commit the signing key or expose it to the frontend. The default token lifetime is 1 hour; set the backend Vercel variable `JWT_EXPIRATION_SECONDS` to `3600` as well if it already overrides the default. JWTs contain a user UUID subject and role claim, but no email or name. Spring Security validates the signature, issuer, and expiration on protected API requests. Keep `JWT_SECRET_BASE64` identical across backend instances and deployments so tokens remain valid consistently.
 
-Public registration creates students only. An admin can create faculty or additional admin accounts through `POST /api/admin/users`. The first admin can be provisioned once through protected deployment environment variables:
+Public registration creates students only. An admin can create faculty or additional admin accounts through `POST /api/admin/users`. Student creation through this route is rejected. Faculty must include an existing `departmentId`; admin department is optional.
+
+`GET /api/admin/users` returns the admin-only account directory with name, email, role, department, active state, and registration time. It never returns password hashes. The admin dashboard uses this directory to show enrolled students and existing staff.
+
+In the frontend, student registration is public and writes a student account to the `users` table with a BCrypt password hash. Faculty use the faculty sign-in link, but their accounts must first be created by an authenticated admin in the admin dashboard. That flow posts the faculty name, email, department, and initial password to the admin-only endpoint. The backend enforces the role and department assignment; do not add public faculty self-registration. The first admin can be provisioned once through protected deployment environment variables:
 
 ```text
 APP_BOOTSTRAP_ADMIN_ENABLED=true
@@ -146,7 +150,7 @@ Success (`200 OK`):
   "data": {
     "token": "<signed-jwt>",
     "tokenType": "Bearer",
-    "expiresInSeconds": 900,
+    "expiresInSeconds": 3600,
     "role": "STUDENT",
     "user": {
       "fullName": "Rahul Sharma",
@@ -320,7 +324,7 @@ The database writes the complaint, a separate row in `complaint_ownership`, and 
 
 ## Complaint image uploads
 
-Images are sent to the private Supabase Storage bucket; PostgreSQL stores only the storage object path, detected media type, byte size, and timestamps. The client filename is ignored. The backend accepts actual, decodable JPEG and PNG content up to 5 MB, verifies the bytes rather than trusting the filename or multipart media type, limits large image dimensions, and assigns a random UUID object name. Binary data is never stored in PostgreSQL.
+Images are sent to the private Supabase Storage bucket; PostgreSQL stores only the storage object path, detected media type, byte size, and timestamps. The client filename is ignored. The backend re-encodes uploaded pixels before Storage upload, stripping embedded EXIF, GPS, camera, and other metadata. The backend accepts actual, decodable JPEG and PNG content up to 5 MB, verifies the bytes rather than trusting the filename or multipart media type, limits large image dimensions, and assigns a random UUID object name. Binary data is never stored in PostgreSQL.
 
 ### Upload one image
 
@@ -375,6 +379,8 @@ Image paths may use the opaque tracking reference returned after complaint submi
 
 `PUT /api/complaints/{complaintId}/status` accepts `{ "status": "IN_PROGRESS", "remarks": "Inspection scheduled" }`. The API checks the handler role and department, validates status transitions, and records each change in `complaint_status_history`. The current schema does not assign a complaint to an individual handler.
 
+`PUT /api/complaints/{complaintId}/remove` accepts `{ "reason": "Abusive or inappropriate language" }`. Faculty can remove only complaints routed to their own department; admins can remove any complaint. This is a reversible soft removal from the active faculty queue: the complaint, owner link, images, and history remain stored, its status becomes `REJECTED`, and the reason is added to status history and shown to the student. Removed complaints cannot be edited by the normal status workflow. Admins retain an audit view of removed reports.
+
 `GET /api/departments` returns department IDs and names for the public student-registration form. The frontend uses these IDs, as well as category and location IDs, when submitting requests; it does not send display labels as database foreign keys.
 
 ## Error examples
@@ -422,7 +428,7 @@ Build the executable application jar:
 mvn package
 ```
 
-The tests cover authentication and locations, plus complaint submission by all three roles, invalid submissions, authentication rejection, initial status/history and ownership persistence, active categories, response privacy, and tracking-reference integrity.
+The tests cover student registration and login security, locations, complaint submission by all three roles, invalid submissions, authentication rejection, initial status/history and ownership persistence, active categories, response privacy, tracking-reference integrity, and faculty complaint removal authorization and audit preservation.
 
 ## Java concepts used
 

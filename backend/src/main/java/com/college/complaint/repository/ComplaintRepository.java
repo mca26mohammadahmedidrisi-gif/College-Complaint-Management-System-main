@@ -18,7 +18,13 @@ public interface ComplaintRepository extends JpaRepository<Complaint, UUID> {
     List<Complaint> findAllByOrderByCreatedAtDesc();
 
     @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
+    List<Complaint> findAllByRemovedAtIsNullOrderByCreatedAtDesc();
+
+    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
     List<Complaint> findAllByDepartmentIdOrderByCreatedAtDesc(UUID departmentId);
+
+    @EntityGraph(attributePaths = {"category", "building", "floor", "classroom"})
+    List<Complaint> findAllByDepartmentIdAndRemovedAtIsNullOrderByCreatedAtDesc(UUID departmentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Complaint c where c.complaintId = :complaintId")

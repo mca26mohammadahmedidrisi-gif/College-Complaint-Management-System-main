@@ -45,6 +45,7 @@ CREATE TABLE floors (
     CONSTRAINT uq_floors_building_floor UNIQUE (building_id, floor_id)
 );
 
+-- A selectable place can be a classroom, lab, canteen, court, gym, field, or common area.
 CREATE TABLE classrooms (
     classroom_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL,
@@ -81,17 +82,26 @@ CREATE TABLE complaints (
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    removed_at TIMESTAMPTZ,
+    removed_by_user_id UUID,
+    removal_reason TEXT,
     CONSTRAINT fk_complaints_category
         FOREIGN KEY (category_id) REFERENCES complaint_categories (category_id) ON DELETE RESTRICT,
     CONSTRAINT fk_complaints_department
         FOREIGN KEY (department_id) REFERENCES departments (department_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_complaints_removed_by
+        FOREIGN KEY (removed_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT,
     -- These composite keys make it impossible to pair a classroom with a different floor/building.
     CONSTRAINT fk_complaints_building_floor
         FOREIGN KEY (building_id, floor_id) REFERENCES floors (building_id, floor_id) ON DELETE RESTRICT,
     CONSTRAINT fk_complaints_floor_classroom
         FOREIGN KEY (floor_id, classroom_id) REFERENCES classrooms (floor_id, classroom_id) ON DELETE RESTRICT,
     CONSTRAINT ck_complaints_status
-        CHECK (status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'))
+        CHECK (status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED')),
+    CONSTRAINT ck_complaints_removal_metadata CHECK (
+        (removed_at IS NULL AND removed_by_user_id IS NULL AND removal_reason IS NULL)
+        OR (removed_at IS NOT NULL AND removed_by_user_id IS NOT NULL AND removal_reason IS NOT NULL)
+    )
 );
 
 CREATE TABLE complaint_images (
@@ -162,6 +172,8 @@ CREATE INDEX idx_complaints_department_status ON complaints (department_id, stat
 CREATE INDEX idx_complaints_location ON complaints (building_id, floor_id, classroom_id);
 CREATE INDEX idx_complaints_floor_classroom ON complaints (floor_id, classroom_id);
 CREATE INDEX idx_complaints_category_id ON complaints (category_id);
+CREATE INDEX idx_complaints_active_department_created_at
+    ON complaints (department_id, created_at DESC) WHERE removed_at IS NULL;
 CREATE INDEX idx_complaint_images_complaint_id ON complaint_images (complaint_id);
 CREATE INDEX idx_status_history_complaint_changed_at ON complaint_status_history (complaint_id, changed_at DESC);
 CREATE INDEX idx_complaint_ownership_user_id_created_at ON complaint_ownership (user_id, created_at DESC);

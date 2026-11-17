@@ -8,7 +8,8 @@ ON CONFLICT (department_name) DO NOTHING;
 
 INSERT INTO buildings (building_name) VALUES
     ('Main Building'),
-    ('Science Building')
+    ('Science Building'),
+    ('Sports Complex')
 ON CONFLICT (building_name) DO NOTHING;
 
 INSERT INTO floors (building_id, floor_number, floor_name)
@@ -17,7 +18,10 @@ FROM (VALUES
     ('Main Building', 0, 'Ground Floor'),
     ('Main Building', 1, 'First Floor'),
     ('Main Building', 2, 'Second Floor'),
-    ('Science Building', 0, 'Ground Floor')
+    ('Main Building', 3, 'Third Floor'),
+    ('Science Building', 0, 'Ground Floor'),
+    ('Science Building', 1, 'First Floor'),
+    ('Sports Complex', 0, 'Ground Level')
 ) AS f(building_name, floor_number, floor_name)
 JOIN buildings b ON b.building_name = f.building_name
 ON CONFLICT (building_id, floor_number) DO UPDATE
@@ -29,17 +33,36 @@ FROM (VALUES
     ('Main Building', 0, '101', 'Room 101'),
     ('Main Building', 0, '102', 'Room 102'),
     ('Main Building', 0, '103', 'Computer Lab 103'),
+    ('Main Building', 0, 'CANTEEN', 'Canteen'),
+    ('Main Building', 0, 'DINING', 'Dining Area'),
+    ('Main Building', 0, 'RECEPTION', 'Reception'),
     ('Main Building', 0, 'COMMON', 'Other / Common Area'),
     ('Main Building', 1, '201', 'Room 201'),
     ('Main Building', 1, '202', 'Room 202'),
     ('Main Building', 1, '203', 'Room 203'),
+    ('Main Building', 1, 'LIBRARY', 'Library'),
     ('Main Building', 1, 'COMMON', 'Other / Common Area'),
     ('Main Building', 2, '301', 'Room 301'),
     ('Main Building', 2, '302', 'Room 302'),
+    ('Main Building', 2, 'SEMINAR', 'Seminar Hall'),
     ('Main Building', 2, 'COMMON', 'Other / Common Area'),
+    ('Main Building', 3, '401', 'Room 401'),
+    ('Main Building', 3, '402', 'Room 402'),
+    ('Main Building', 3, 'LECTURE', 'Lecture Hall'),
+    ('Main Building', 3, 'COMMON', 'Other / Common Area'),
     ('Science Building', 0, 'S101', 'Science Lab 101'),
     ('Science Building', 0, 'S102', 'Science Lab 102'),
-    ('Science Building', 0, 'COMMON', 'Other / Common Area')
+    ('Science Building', 0, 'COMMON', 'Other / Common Area'),
+    ('Science Building', 1, 'S201', 'Biology Lab'),
+    ('Science Building', 1, 'S202', 'Research Lab'),
+    ('Science Building', 1, 'COMMON', 'Other / Common Area'),
+    ('Sports Complex', 0, 'GYM', 'Gymnasium'),
+    ('Sports Complex', 0, 'INDOOR-HALL', 'Indoor Sports Hall'),
+    ('Sports Complex', 0, 'BADMINTON', 'Badminton Court'),
+    ('Sports Complex', 0, 'BASKETBALL', 'Basketball Court'),
+    ('Sports Complex', 0, 'SPORTS-GROUND', 'Sports Ground / Field'),
+    ('Sports Complex', 0, 'CHANGING', 'Changing Room'),
+    ('Sports Complex', 0, 'COMMON', 'Other Sports Area')
 ) AS c(building_name, floor_number, classroom_number, classroom_name)
 JOIN buildings b ON b.building_name = c.building_name
 JOIN floors f ON f.building_id = b.building_id AND f.floor_number = c.floor_number

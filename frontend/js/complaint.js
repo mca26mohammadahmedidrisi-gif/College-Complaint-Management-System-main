@@ -67,10 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
     description.addEventListener('input', () => document.querySelector('[data-char-count]').textContent = description.value.length);
 
     const fileInput = form.elements.image, zone = document.querySelector('[data-upload-zone]'), previewBox = document.querySelector('[data-image-preview]'), uploadError = document.querySelector('[data-upload-error]');
-    let previewImage = '';
-    const removeFile = () => { fileInput.value = ''; previewImage = ''; previewBox.classList.add('hidden'); previewBox.querySelector('img').removeAttribute('src'); uploadError.textContent = ''; };
+    let previewImage = '', sanitizedFile = null;
+    const removeFile = () => { fileInput.value = ''; previewImage = ''; sanitizedFile = null; previewBox.classList.add('hidden'); previewBox.querySelector('img').removeAttribute('src'); uploadError.textContent = ''; };
     const loadFile = async file => {
-      uploadError.textContent = ''; if (!file) return;
+      uploadError.textContent = ''; sanitizedFile = null; previewImage = ''; previewBox.classList.add('hidden'); if (!file) return;
       if (!['image/jpeg', 'image/png'].includes(file.type) || !/\.(jpe?g|png)$/i.test(file.name)) { removeFile(); uploadError.textContent = 'Choose a JPG, JPEG or PNG image.'; return; }
       if (file.size > 5 * 1024 * 1024) { removeFile(); uploadError.textContent = 'This image is larger than 5 MB. Choose a smaller file.'; return; }
       try {
@@ -78,10 +78,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const img = await new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('This image could not be opened.')); image.src = source; });
         const scale = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
         const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(img.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height); previewImage = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', .82);
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('This image could not be processed. Try another file.');
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const contentType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const sanitizedBlob = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('This image could not be processed. Try another file.')), contentType, .82));
+        if (sanitizedBlob.size > 5 * 1024 * 1024) throw new Error('The processed image is larger than 5 MB. Choose a smaller image.');
+        sanitizedFile = new File([sanitizedBlob], `campuscare-report.${contentType === 'image/png' ? 'png' : 'jpg'}`, { type: contentType });
+        previewImage = canvas.toDataURL(contentType, .82);
         previewBox.querySelector('img').src = previewImage; document.querySelector('[data-file-name]').textContent = file.name;
         document.querySelector('[data-file-size]').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`; previewBox.classList.remove('hidden');
-      } catch (_) { removeFile(); uploadError.textContent = 'We could not preview that image. Try another file.'; }
+      } catch (error) { removeFile(); uploadError.textContent = error.message || 'We could not preview that image. Try another file.'; }
     };
     document.querySelector('[data-browse]').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
@@ -93,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async event => {
       event.preventDefault();
       if (!form.reportValidity()) return;
+      if (fileInput.files[0] && !sanitizedFile) { CampusCare.toast('Wait for the image to finish processing, or remove it before submitting.'); return; }
       if (!building.value || !floor.value || !room.value) { CampusCare.toast('Choose a building, floor and classroom.'); (building.value ? (floor.value ? room : floor) : building).focus(); return; }
       const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
       try {
@@ -101,8 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
             title: String(form.elements.title.value).trim(), description: String(description.value).trim(), categoryId: category.value, classroomId: room.value
           }, loadingTarget: submit }));
           let imageUploadFailed = false;
-          if (fileInput.files[0]) {
-            const image = new FormData(); image.append('file', fileInput.files[0]);
+          if (sanitizedFile) {
+            const image = new FormData(); image.append('file', sanitizedFile, sanitizedFile.name);
             try { await CampusCareAPI.request('complaints.uploadImage', { method: 'POST', pathParams: { complaintId: result.trackingReference }, body: image }); }
             catch (_) { imageUploadFailed = true; }
           }
@@ -118,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const complaint = { id, title: String(data.get('title')).trim(), category: category.value, description: String(data.get('description')).trim(), department: 'Unspecified', building: building.value, floor: floor.value, room: room.value, date: new Date().toISOString().slice(0, 10), status: 'Pending', remarks: '', image: previewImage, imageName: fileInput.files[0]?.name || '', ownerId: CampusCare.session()?.ownerId || 'demo-student' };
         CampusCare.add(complaint); document.querySelector('.form-page-heading').classList.add('hidden'); form.classList.add('hidden');
         const success = document.querySelector('[data-success]'); success.classList.remove('hidden'); success.querySelector('[data-reference]').textContent = id;
+        success.querySelector('p').textContent = 'Your report was saved in this browser preview. Save the reference ID to track it.';
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (error) { CampusCare.toast(error.message || 'The complaint could not be submitted.', 'error'); }
       finally { submit.disabled = false; }
@@ -136,7 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = document.querySelector('[data-status-result]'), empty = document.querySelector('[data-status-empty]');
       const status = CampusCare.displayStatus(complaint.status);
       const building = complaint.building || '', floor = complaint.floor || '', room = complaint.classroom || '';
-      result.innerHTML = `<div class="status-result-head"><div><span class="status-id">${CampusCare.esc(complaint.trackingReference || complaint.id)}</span><h2>${CampusCare.esc(complaint.title)}</h2><small class="muted">Submitted ${CampusCare.formatDate(complaint.submittedAt || complaint.date)}</small></div>${CampusCare.statusBadge(status)}</div><p class="status-description">${CampusCare.esc(complaint.description)}</p><div class="status-meta"><div><small>Category</small><b>${CampusCare.esc(complaint.category)}</b></div><div><small>Building</small><b>${CampusCare.esc(building)}</b></div><div><small>Floor</small><b>${CampusCare.esc(floor)}</b></div><div><small>Classroom / room</small><b>${CampusCare.esc(room)}</b></div></div>${complaint.remarks ? `<div class="remarks-box"><b>Staff remarks</b><p>${CampusCare.esc(complaint.remarks)}</p></div>` : '<div class="remarks-box"><b>Staff remarks</b><p>No remarks have been added yet.</p></div>'}`;
+      const removalNotice = complaint.removed ? `<div class="remarks-box"><b>Removed from the active faculty queue</b><p>${CampusCare.esc(complaint.removalReason || 'The faculty team removed this report.')}</p></div>` : '';
+      result.innerHTML = `<div class="status-result-head"><div><span class="status-id">${CampusCare.esc(complaint.trackingReference || complaint.id)}</span><h2>${CampusCare.esc(complaint.title)}</h2><small class="muted">Submitted ${CampusCare.formatDate(complaint.submittedAt || complaint.date)}</small></div>${CampusCare.statusBadge(status)}</div><p class="status-description">${CampusCare.esc(complaint.description)}</p><div class="status-meta"><div><small>Category</small><b>${CampusCare.esc(complaint.category)}</b></div><div><small>Building</small><b>${CampusCare.esc(building)}</b></div><div><small>Floor</small><b>${CampusCare.esc(floor)}</b></div><div><small>Classroom / room</small><b>${CampusCare.esc(room)}</b></div></div>${removalNotice}${complaint.remarks ? `<div class="remarks-box"><b>Staff remarks</b><p>${CampusCare.esc(complaint.remarks)}</p></div>` : '<div class="remarks-box"><b>Staff remarks</b><p>No remarks have been added yet.</p></div>'}`;
       if (Array.isArray(complaint.history) && complaint.history.length) {
         const historyBox = document.createElement('section'); historyBox.className = 'complaint-history';
         const heading = document.createElement('h3'); heading.textContent = 'Status history'; historyBox.append(heading);

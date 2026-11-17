@@ -98,4 +98,8 @@ public class UserAccount {
     public boolean isActive() {
         return active;
     }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

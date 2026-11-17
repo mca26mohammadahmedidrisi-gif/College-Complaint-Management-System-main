@@ -21,5 +21,8 @@ public record ComplaintView(
         ComplaintStatus status,
         Instant submittedAt,
         String remarks,
+        boolean removed,
+        Instant removedAt,
+        String removalReason,
         List<ComplaintHistoryEntry> history
 ) { }
