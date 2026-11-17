@@ -12,16 +12,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const accountRows = document.querySelector('[data-account-rows]');
     const accountSearch = document.querySelector('[data-account-search]');
     const accountCount = document.querySelector('[data-account-count]');
+    const studentCount = document.querySelector('[data-student-count]');
+    const accountRoleFilter = document.querySelector('[data-account-role-filter]');
     const accountNotice = document.querySelector('[data-account-notice]');
     let accounts = [];
     const renderAccounts = () => {
       if (!accountRows) return;
       const query = String(accountSearch?.value || '').trim().toLowerCase();
-      const filtered = accounts.filter(account => [account.fullName, account.email, account.role, account.departmentName]
-        .some(value => String(value || '').toLowerCase().includes(query)));
-      accountCount.textContent = `(${accounts.length})`;
-      accountRows.innerHTML = filtered.map(account => `<tr><td data-label="Name">${CampusCare.esc(account.fullName)}</td><td data-label="Email">${CampusCare.esc(account.email)}</td><td data-label="Role">${CampusCare.esc(account.role)}</td><td data-label="Department">${CampusCare.esc(account.departmentName || '—')}</td><td data-label="Registered">${CampusCare.formatDate(account.createdAt)}${account.active ? '' : ' · Inactive'}</td></tr>`).join('')
-        || `<tr><td colspan="5">${query ? 'No accounts match your search.' : 'No accounts are registered yet.'}</td></tr>`;
+      const students = accounts.filter(account => account.role === 'STUDENT');
+      const selectedRole = accountRoleFilter?.value || 'STUDENT';
+      const filtered = accounts.filter(account => (selectedRole === 'all' || account.role === selectedRole)
+        && [account.fullName, account.email, account.role, account.departmentName, account.streamName, account.semester]
+          .some(value => String(value || '').toLowerCase().includes(query)));
+      if (studentCount) studentCount.textContent = `(${students.length})`;
+      if (accountCount) accountCount.textContent = `${accounts.length} total accounts`;
+      accountRows.innerHTML = filtered.map(account => `<tr><td data-label="Name">${CampusCare.esc(account.fullName)}</td><td data-label="Email">${CampusCare.esc(account.email)}</td><td data-label="Role">${CampusCare.esc(account.role)}</td><td data-label="Stream">${CampusCare.esc(account.streamName || '—')}</td><td data-label="Semester">${account.semester != null ? `Semester ${CampusCare.esc(account.semester)}` : '—'}</td><td data-label="Department">${CampusCare.esc(account.departmentName || '—')}</td><td data-label="Registered">${CampusCare.formatDate(account.createdAt)}${account.active ? '' : ' · Inactive'}</td></tr>`).join('')
+        || `<tr><td colspan="7">${query ? 'No accounts match your search.' : selectedRole === 'STUDENT' ? 'No student accounts are registered yet.' : 'No accounts are registered yet.'}</td></tr>`;
     };
     const loadAccounts = async () => {
       if (!directory) return;
@@ -39,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
     accountSearch?.addEventListener('input', renderAccounts);
+    accountRoleFilter?.addEventListener('change', renderAccounts);
     window.addEventListener('campuscare:refresh', loadAccounts);
     const facultyForm = document.querySelector('[data-faculty-account-form]');
     if (facultyPanel && facultyForm) {

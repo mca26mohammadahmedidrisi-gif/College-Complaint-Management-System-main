@@ -26,6 +26,12 @@ public class UserAccount {
     @Column(name = "department_id")
     private UUID departmentId;
 
+    @Column(name = "stream_name", length = 40)
+    private String streamName;
+
+    @Column(name = "semester")
+    private Integer semester;
+
     @Column(name = "full_name", nullable = false, length = 160)
     private String fullName;
 
@@ -80,6 +86,19 @@ public class UserAccount {
 
     public UUID getDepartmentId() {
         return departmentId;
+    }
+
+    public String getStreamName() {
+        return streamName;
+    }
+
+    public Integer getSemester() {
+        return semester;
+    }
+
+    public void setStudentAcademicProfile(String streamName, Integer semester) {
+        this.streamName = streamName;
+        this.semester = semester;
     }
 
     public String getFullName() {

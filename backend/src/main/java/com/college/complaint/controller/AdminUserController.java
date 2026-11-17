@@ -43,7 +43,7 @@ public class AdminUserController {
         List<AdminUserView> rows = users.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(user -> new AdminUserView(user.getUserId(), user.getFullName(), user.getEmail(),
                         user.getRole(), user.getDepartmentId(), departmentNames.get(user.getDepartmentId()),
-                        user.isActive(), user.getCreatedAt()))
+                        user.getStreamName(), user.getSemester(), user.isActive(), user.getCreatedAt()))
                 .toList();
         return ApiResponse.success("Accounts retrieved successfully", rows);
     }

@@ -122,7 +122,14 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const response = await CampusCareAPI.request('auth.student.register', {
         method: 'POST', timeoutMs: 60000,
-        body: { fullName: String(data.get('fullName')).trim(), email: String(data.get('email')).trim(), password: String(data.get('password')), departmentId }, loadingTarget: register.querySelector('[type="submit"]')
+        body: {
+          fullName: String(data.get('fullName')).trim(),
+          email: String(data.get('email')).trim(),
+          password: String(data.get('password')),
+          departmentId,
+          streamName: String(data.get('streamName')),
+          semester: Number(data.get('semester'))
+        }, loadingTarget: register.querySelector('[type="submit"]')
       });
       notice.className = 'form-notice success-text';
       if (response?.data?.requiresEmailVerification) {

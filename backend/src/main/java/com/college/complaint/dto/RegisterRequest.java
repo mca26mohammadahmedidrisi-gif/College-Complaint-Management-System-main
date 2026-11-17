@@ -3,6 +3,9 @@ package com.college.complaint.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
@@ -22,6 +25,15 @@ public record RegisterRequest(
         String password,
 
         @NotNull(message = "Department ID is required")
-        UUID departmentId
+        UUID departmentId,
+
+        @NotBlank(message = "Stream is required")
+        @Pattern(regexp = "(?i)^(MSS|MCS|PGDM|MBA)$", message = "Choose a valid stream")
+        String streamName,
+
+        @NotNull(message = "Semester is required")
+        @Min(value = 1, message = "Semester must be 1 or 2")
+        @Max(value = 2, message = "Semester must be 1 or 2")
+        Integer semester
 ) {
 }

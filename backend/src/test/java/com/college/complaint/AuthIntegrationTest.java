@@ -70,11 +70,15 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"))
                 .andExpect(jsonPath("$.data.user.email").value("student@example.com"))
+                .andExpect(jsonPath("$.data.user.streamName").value("MSS"))
+                .andExpect(jsonPath("$.data.user.semester").value(1))
                 .andExpect(jsonPath("$.data.user.password").doesNotExist())
                 .andExpect(jsonPath("$.data.user.passwordHash").doesNotExist());
 
         UserAccount saved = userRepository.findByEmailIgnoreCase("student@example.com").orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, saved.getRole());
+        org.junit.jupiter.api.Assertions.assertEquals("MSS", saved.getStreamName());
+        org.junit.jupiter.api.Assertions.assertEquals(1, saved.getSemester());
         org.junit.jupiter.api.Assertions.assertNotEquals(PASSWORD, saved.getPasswordHash());
         org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches(PASSWORD, saved.getPasswordHash()));
     }
@@ -84,7 +88,7 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","departmentId":"%s","role":"ADMIN"}
+                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MSS","semester":1,"role":"ADMIN"}
                                 """.formatted(departmentId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
@@ -92,7 +96,7 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","departmentId":"%s","role":"FACULTY"}
+                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MCS","semester":2,"role":"FACULTY"}
                                 """.formatted(departmentId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
@@ -127,6 +131,22 @@ class AuthIntegrationTest {
 
         UserAccount student = userRepository.save(new UserAccount(
                 departmentId, "Student User", "directory-student@example.com", passwordEncoder.encode(PASSWORD), Role.STUDENT));
+        student.setStudentAcademicProfile("MBA", 2);
+        userRepository.save(student);
+        String directoryResponse = mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode listedAccounts = objectMapper.readTree(directoryResponse).path("data");
+        boolean studentProfileVisible = false;
+        for (JsonNode listedAccount : listedAccounts) {
+            if ("directory-student@example.com".equals(listedAccount.path("email").asText())) {
+                studentProfileVisible = "MBA".equals(listedAccount.path("streamName").asText())
+                        && listedAccount.path("semester").asInt() == 2;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(studentProfileVisible,
+                "Admin account directory should show student stream and semester");
         mockMvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + tokenFor(student)))
                 .andExpect(status().isForbidden());
     }
@@ -153,7 +173,28 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data.email").exists())
                 .andExpect(jsonPath("$.data.password").exists())
-                .andExpect(jsonPath("$.data.departmentId").exists());
+                .andExpect(jsonPath("$.data.departmentId").exists())
+                .andExpect(jsonPath("$.data.streamName").exists())
+                .andExpect(jsonPath("$.data.semester").exists());
+    }
+
+    @Test
+    void rejectsUnknownStudentStreamAndSemester() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","departmentId":"%s","streamName":"OTHER","semester":1}
+                                """.formatted(departmentId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.streamName").exists());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Student Two","email":"student2@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MSS","semester":3}
+                                """.formatted(departmentId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.semester").exists());
     }
 
     @Test
@@ -303,7 +344,7 @@ class AuthIntegrationTest {
 
     private String registerJson(String name, String email, String password, UUID department) {
         return """
-                {"fullName":"%s","email":"%s","password":"%s","departmentId":"%s"}
+                {"fullName":"%s","email":"%s","password":"%s","departmentId":"%s","streamName":"MSS","semester":1}
                 """.formatted(name, email, password, department);
     }
 

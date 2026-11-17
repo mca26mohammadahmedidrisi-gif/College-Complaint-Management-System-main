@@ -66,6 +66,7 @@ public class AuthService {
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
                 Role.STUDENT);
+        account.setStudentAcademicProfile(request.streamName().trim().toUpperCase(Locale.ROOT), request.semester());
         account.setEmailVerified(!emailDelivery.enabled());
         UserAccount saved = userRepository.save(account);
         if (emailDelivery.enabled()) authActionTokens.sendVerification(saved.getUserId(), saved.getEmail());
@@ -133,7 +134,8 @@ public class AuthService {
     }
 
     private AuthDtos.UserSummary toSummary(UserAccount account) {
-        return new AuthDtos.UserSummary(account.getFullName(), account.getEmail(), account.getRole());
+        return new AuthDtos.UserSummary(account.getFullName(), account.getEmail(), account.getRole(),
+                account.getStreamName(), account.getSemester());
     }
 
     private String normalizeEmail(String email) {

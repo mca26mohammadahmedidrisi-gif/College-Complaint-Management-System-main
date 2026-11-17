@@ -12,6 +12,8 @@ CREATE TABLE departments (
 CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     department_id UUID,
+    stream_name VARCHAR(40),
+    semester INTEGER,
     full_name VARCHAR(160) NOT NULL,
     email VARCHAR(320) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
@@ -23,7 +25,12 @@ CREATE TABLE users (
     CONSTRAINT fk_users_department
         FOREIGN KEY (department_id) REFERENCES departments (department_id) ON DELETE RESTRICT,
     CONSTRAINT ck_users_role CHECK (role IN ('STUDENT', 'FACULTY', 'ADMIN')),
-    CONSTRAINT ck_faculty_department CHECK (role <> 'FACULTY' OR department_id IS NOT NULL)
+    CONSTRAINT ck_faculty_department CHECK (role <> 'FACULTY' OR department_id IS NOT NULL),
+    CONSTRAINT ck_users_academic_profile CHECK (
+        (stream_name IS NULL AND semester IS NULL)
+        OR (stream_name IS NOT NULL AND btrim(stream_name) <> ''
+            AND stream_name IN ('MSS', 'MCS', 'PGDM', 'MBA') AND semester IS NOT NULL AND semester IN (1, 2))
+    )
 );
 
 CREATE TABLE buildings (
@@ -225,6 +232,7 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_action_tokens ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX idx_users_department_id ON users (department_id);
+CREATE INDEX idx_users_student_stream_semester ON users (stream_name, semester) WHERE role = 'STUDENT';
 CREATE INDEX idx_users_role_active ON users (role, is_active);
 CREATE INDEX idx_categories_department_id ON complaint_categories (department_id);
 CREATE INDEX idx_complaints_status_created_at ON complaints (status, created_at DESC);

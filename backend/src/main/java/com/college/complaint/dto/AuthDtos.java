@@ -12,7 +12,7 @@ public final class AuthDtos {
     private AuthDtos() {
     }
 
-    public record UserSummary(String fullName, String email, Role role) {
+    public record UserSummary(String fullName, String email, Role role, String streamName, Integer semester) {
     }
 
     public record LoginData(String token, String tokenType, long expiresInSeconds,

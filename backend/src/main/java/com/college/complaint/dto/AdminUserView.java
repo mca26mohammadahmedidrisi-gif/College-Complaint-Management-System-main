@@ -12,6 +12,8 @@ public record AdminUserView(
         Role role,
         UUID departmentId,
         String departmentName,
+        String streamName,
+        Integer semester,
         boolean active,
         Instant createdAt
 ) { }
