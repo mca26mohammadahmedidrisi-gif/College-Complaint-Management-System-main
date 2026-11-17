@@ -1,6 +1,6 @@
 # Supabase and Vercel deployment
 
-The frontend and Java 17 Spring Boot API can both run on Vercel as separate Vercel projects. The API uses Vercel's container runtime through `backend/Dockerfile.vercel`; Supabase remains the database and private image-storage service. Vercel currently marks its Container runtime as beta, so review its limits and billing before relying on it for production traffic. Keep database credentials and Supabase secret keys only in the backend Vercel project's environment variables.
+The frontend and Java 17 Spring Boot API can both run on Vercel as separate Vercel projects. The API uses Vercel's container runtime through `backend/Dockerfile.vercel`; its Vercel profile avoids blocking startup on remote database metadata and schema checks. Apply Supabase schema changes through the migration scripts before deployment; local and test profiles continue schema validation. Supabase remains the database and private image-storage service. Vercel's container runtime scales to zero, so review its limits and billing before relying on it for production traffic. Keep database credentials and Supabase secret keys only in the backend Vercel project's environment variables.
 
 ## 1. Prepare the Supabase project
 
