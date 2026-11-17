@@ -11,6 +11,7 @@ CREATE TABLE departments (
 
 CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Null for students; their academic program is stored in stream_name instead.
     department_id UUID,
     stream_name VARCHAR(40),
     semester INTEGER,

@@ -23,54 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector(`.role-option[data-role="${initialRole}"]`)?.click();
   }
 
-  const departmentSelect = document.getElementById('departmentId');
-  if (departmentSelect && !apiMode) {
-    const previewDepartments = ['Facilities', 'Information Technology', 'Student Affairs'];
-    departmentSelect.replaceChildren(new Option('Choose your department', ''));
-    previewDepartments.forEach(name => departmentSelect.add(new Option(name, name)));
-    const hint = document.querySelector('#register-form .demo-hint');
-    if (hint) hint.innerHTML = '<span>i</span><span><b>Preview only</b><br>No account will be created in preview mode.</span>';
-  } else if (departmentSelect) {
-    const retryButton = document.querySelector('[data-retry-departments]');
-    const departmentStatus = document.querySelector('[data-department-status]');
-    const loadDepartments = async () => {
-      departmentSelect.disabled = true;
-      departmentSelect.setAttribute('aria-busy', 'true');
-      departmentSelect.replaceChildren(new Option('Loading departments…', ''));
-      if (retryButton) retryButton.hidden = true;
-      if (departmentStatus) { departmentStatus.hidden = true; departmentStatus.textContent = ''; }
-      try {
-        const response = await CampusCareAPI.request('departments');
-        const departments = response?.data;
-        if (!response?.success || !Array.isArray(departments)) throw new Error('The department list returned an invalid response.');
-        const validDepartments = departments.filter(item => item?.departmentId && item?.departmentName);
-        departmentSelect.replaceChildren(new Option(validDepartments.length ? 'Choose your department' : 'No departments are available', ''));
-        validDepartments.forEach(department => departmentSelect.add(new Option(department.departmentName, department.departmentId)));
-        departmentSelect.disabled = validDepartments.length === 0;
-        if (!validDepartments.length) {
-          const notice = document.querySelector('#register-form [data-form-notice]');
-          if (notice) { notice.className = 'form-notice error-text'; notice.textContent = 'No departments are configured yet. Please contact the college administrator.'; }
-          if (departmentStatus) { departmentStatus.textContent = 'No departments were returned by the backend. Ask the college administrator to add departments.'; departmentStatus.hidden = false; }
-        }
-      } catch (error) {
-        departmentSelect.replaceChildren(new Option('Departments unavailable — retry below', ''));
-        if (retryButton) retryButton.hidden = false;
-        const notice = document.querySelector('#register-form [data-form-notice]');
-        if (notice) showError(notice, error);
-        if (departmentStatus) {
-          departmentStatus.textContent = error?.kind === 'network_error'
-            ? 'The API cannot be reached. Start the backend and check its URL, then retry.'
-            : 'The backend could not load departments. Check the API and database connection, then retry.';
-          departmentStatus.hidden = false;
-        }
-      } finally {
-        departmentSelect.removeAttribute('aria-busy');
-      }
-    };
-    retryButton?.addEventListener('click', loadDepartments);
-    loadDepartments();
-  }
-
   const login = document.getElementById('login-form');
   if (login && new URLSearchParams(location.search).get('reason') === 'session-expired') {
     const notice = login.querySelector('[data-form-notice]');
@@ -116,8 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!register.reportValidity()) return;
     if (data.get('password') !== data.get('confirmPassword')) { notice.textContent = 'The passwords do not match.'; document.getElementById('confirmPassword').focus(); return; }
     if (!apiMode) { notice.textContent = 'Registration is in preview mode. No account was created.'; CampusCare.toast('No account was created in preview mode.'); return; }
-    const departmentId = String(data.get('departmentId') || '');
-    if (!departmentId) { notice.textContent = 'Choose your department.'; return; }
     notice.textContent = 'Creating your account…';
     try {
       const response = await CampusCareAPI.request('auth.student.register', {
@@ -126,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
           fullName: String(data.get('fullName')).trim(),
           email: String(data.get('email')).trim(),
           password: String(data.get('password')),
-          departmentId,
           streamName: String(data.get('streamName')),
           semester: Number(data.get('semester'))
         }, loadingTarget: register.querySelector('[type="submit"]')

@@ -13,9 +13,9 @@ The static frontend now calls the Spring Boot API in API mode. Append `?mode=moc
 
 | Frontend operation | Backend operation | Notes |
 |---|---|---|
-| Student department selector | `GET /api/departments` | Public reference data for registration. |
-| Student registration | `POST /api/auth/register` | Sends full name, email, password, and department UUID. |
-| Sign in / sign out | `POST /api/auth/login`, `POST /api/auth/logout` | All roles use the same login route. Logout clears this browser session; the JWT remains valid until expiry. |
+| Student enrollment | `POST /api/auth/register` | Sends full name, email, password, enrolled stream, and semester. Stream and semester are persisted in the user record; student department is null. |
+| Faculty department selector | `GET /api/departments` | Complaint-routing departments used by admins when creating faculty accounts. |
+| Sign in / browser sign out | `POST /api/auth/login` | All roles use the same login route. Logout discards the current tab's session and sends the admin to the faculty sign-in form; a copied stateless JWT remains valid until expiry. |
 | Location/category selectors | `/api/locations/...`, `GET /api/complaints/categories` | Authenticated; sends database IDs, not display labels. |
 | Submit, upload image, own history | `POST /api/complaints`, `POST /api/complaints/{trackingReference}/images`, `GET /api/complaints/mine...` | Uses a signed tracking reference; ownership stays private. JPEG/PNG uploads are reprocessed to strip embedded metadata and limited to 5 MB. |
 | Staff complaint list and updates | `GET /api/complaints/staff`, `PUT /api/complaints/{complaintId}/status` | Admin sees all; faculty sees complaints routed to their department. Response DTOs omit submitter identity. |

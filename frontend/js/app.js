@@ -22,7 +22,14 @@
   const save = rows => localStorage.setItem(KEY, JSON.stringify(rows));
   const session = () => { try { return JSON.parse(sessionStorage.getItem(window.CAMPUSCARE_CONFIG.mode === 'mock' ? PREVIEW_SESSION_KEY : SESSION_KEY)) || null; } catch (_) { return null; } };
   const setSession = value => sessionStorage.setItem(window.CAMPUSCARE_CONFIG.mode === 'mock' ? PREVIEW_SESSION_KEY : SESSION_KEY, JSON.stringify(value));
-  const clearSession = () => { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(PREVIEW_SESSION_KEY); };
+  const clearSession = () => {
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(PREVIEW_SESSION_KEY);
+    } catch (_) {
+      // Continue to the sign-in page even if browser storage is unavailable.
+    }
+  };
   const all = () => read();
   const forStudent = () => read().filter(row => row.ownerId === (session()?.ownerId || 'demo-student'));
   const byId = id => read().find(row => row.id.toLowerCase() === String(id).trim().toLowerCase());
@@ -201,8 +208,7 @@
     document.querySelectorAll('[data-go-back]').forEach(button => button.addEventListener('click', () => {
       if (history.length > 1) history.back(); else location.href = 'index.html';
     }));
-    document.querySelectorAll('[data-logout]').forEach(link => link.addEventListener('click', async event => {
-      if (window.CAMPUSCARE_CONFIG.mode !== 'api') { clearSession(); return; }
+    document.querySelectorAll('[data-logout]').forEach(link => link.addEventListener('click', event => {
       event.preventDefault();
       // The API uses stateless short-lived JWTs and logout does not revoke them.
       // Clear the browser credential before navigating; an expired token must never block sign-out.

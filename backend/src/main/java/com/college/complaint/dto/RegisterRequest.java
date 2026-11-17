@@ -8,8 +8,6 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import java.util.UUID;
-
 public record RegisterRequest(
         @NotBlank(message = "Full name is required")
         @Size(max = 160, message = "Full name must be at most 160 characters")
@@ -23,9 +21,6 @@ public record RegisterRequest(
         @NotBlank(message = "Password is required")
         @Size(min = 8, max = 72, message = "Password must contain 8 to 72 characters")
         String password,
-
-        @NotNull(message = "Department ID is required")
-        UUID departmentId,
 
         @NotBlank(message = "Stream is required")
         @Pattern(regexp = "(?i)^(MSS|MCA|PGDM|MBA)$", message = "Choose a valid stream")

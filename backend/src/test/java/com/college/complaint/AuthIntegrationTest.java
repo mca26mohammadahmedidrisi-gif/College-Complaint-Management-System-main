@@ -68,7 +68,7 @@ class AuthIntegrationTest {
     void registersStudentAndStoresOnlyBcryptHash() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("Student One", "student@example.com", PASSWORD, departmentId)))
+                        .content(registerJson("Student One", "student@example.com", PASSWORD)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"))
@@ -80,6 +80,8 @@ class AuthIntegrationTest {
 
         UserAccount saved = userRepository.findByEmailIgnoreCase("student@example.com").orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, saved.getRole());
+        org.junit.jupiter.api.Assertions.assertNull(saved.getDepartmentId(),
+                "Student enrollment should not require a complaint-routing department");
         org.junit.jupiter.api.Assertions.assertEquals("MSS", saved.getStreamName());
         org.junit.jupiter.api.Assertions.assertEquals(1, saved.getSemester());
         org.junit.jupiter.api.Assertions.assertNotEquals(PASSWORD, saved.getPasswordHash());
@@ -91,8 +93,8 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"MCA Student","email":"mca-student@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MCA","semester":2}
-                                """.formatted(departmentId)))
+                                {"fullName":"MCA Student","email":"mca-student@example.com","password":"CollegePass123","streamName":"MCA","semester":2}
+                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.streamName").value("MCA"))
                 .andExpect(jsonPath("$.data.user.semester").value(2));
@@ -106,16 +108,16 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MSS","semester":1,"role":"ADMIN"}
-                                """.formatted(departmentId)))
+                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","streamName":"MSS","semester":1,"role":"ADMIN"}
+                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MCA","semester":2,"role":"FACULTY"}
-                                """.formatted(departmentId)))
+                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","streamName":"MCA","semester":2,"role":"FACULTY"}
+                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
     }
@@ -180,7 +182,7 @@ class AuthIntegrationTest {
         register("duplicate@example.com");
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("Student Two", "DUPLICATE@example.com", PASSWORD, departmentId)))
+                        .content(registerJson("Student Two", "DUPLICATE@example.com", PASSWORD)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value(containsString("already exists")));
@@ -197,7 +199,6 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data.email").exists())
                 .andExpect(jsonPath("$.data.password").exists())
-                .andExpect(jsonPath("$.data.departmentId").exists())
                 .andExpect(jsonPath("$.data.streamName").exists())
                 .andExpect(jsonPath("$.data.semester").exists());
     }
@@ -207,16 +208,16 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","departmentId":"%s","streamName":"OTHER","semester":1}
-                                """.formatted(departmentId)))
+                                {"fullName":"Student One","email":"student@example.com","password":"CollegePass123","streamName":"OTHER","semester":1}
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data.streamName").exists());
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Student Two","email":"student2@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MSS","semester":3}
-                                """.formatted(departmentId)))
+                                {"fullName":"Student Two","email":"student2@example.com","password":"CollegePass123","streamName":"MSS","semester":3}
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data.semester").exists());
     }
@@ -370,7 +371,7 @@ class AuthIntegrationTest {
     private void register(String email) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(registerJson("Student One", email, PASSWORD, departmentId)))
+                .content(registerJson("Student One", email, PASSWORD)))
                 .andExpect(status().isCreated());
     }
 
@@ -417,10 +418,10 @@ class AuthIntegrationTest {
                 JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
     }
 
-    private String registerJson(String name, String email, String password, UUID department) {
+    private String registerJson(String name, String email, String password) {
         return """
-                {"fullName":"%s","email":"%s","password":"%s","departmentId":"%s","streamName":"MSS","semester":1}
-                """.formatted(name, email, password, department);
+                {"fullName":"%s","email":"%s","password":"%s","streamName":"MSS","semester":1}
+                """.formatted(name, email, password);
     }
 
     private String loginJson(String email, String password) {

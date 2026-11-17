@@ -78,7 +78,7 @@ Do not reuse the JWT key. Rotating this key invalidates previously issued tracki
 
 Never commit the signing key or expose it to the frontend. The default token lifetime is 1 hour; set the backend Vercel variable `JWT_EXPIRATION_SECONDS` to `3600` as well if it already overrides the default. JWTs contain a user UUID subject and role claim, but no email or name. Spring Security validates the signature, issuer, and expiration on protected API requests. Keep `JWT_SECRET_BASE64` identical across backend instances and deployments so tokens remain valid consistently.
 
-Public registration creates students only. An admin can create faculty or additional admin accounts through `POST /api/admin/users`. Student creation through this route is rejected. Faculty must include an existing `departmentId`; admin department is optional.
+Public registration creates students only. Students choose their enrolled stream and semester; they are not asked to choose a complaint-routing department. Those values are saved to `users.stream_name` and `users.semester`. An admin can create faculty or additional admin accounts through `POST /api/admin/users`. Student creation through this route is rejected. Faculty must include an existing `departmentId`; admin department is optional. Departments such as Facilities, Information Technology, and Student Affairs remain complaint-routing departments.
 
 Student complaints can be edited while still `PENDING`; the previous title, description, category, and location are retained in `complaint_revisions`. Students and authorized staff can reply in the complaint thread. Student author labels are anonymized in staff responses. Administrators can assign an active faculty account from the complaint department; once assigned, only that faculty member can manage the report. Each status and assignment change records its actor. In-app notices are polled by dashboards; email delivery requires the SMTP settings above.
 
@@ -110,7 +110,8 @@ Request:
   "fullName": "Rahul Sharma",
   "email": "rahul@example.com",
   "password": "a-strong-password",
-  "departmentId": "b9b8c000-0d32-4a1e-b364-f17b667d28bc"
+  "streamName": "MCA",
+  "semester": 1
 }
 ```
 
@@ -389,7 +390,7 @@ Image paths may use the opaque tracking reference returned after complaint submi
 
 `PUT /api/complaints/{complaintId}/remove` accepts `{ "reason": "Abusive or inappropriate language" }`. Faculty can remove only complaints routed to their own department; admins can remove any complaint. This is a reversible soft removal from the active faculty queue: the complaint, owner link, images, and history remain stored, its status becomes `REJECTED`, and the reason is added to status history and shown to the student. Removed complaints cannot be edited by the normal status workflow. Admins retain an audit view of removed reports.
 
-`GET /api/departments` returns department IDs and names for the public student-registration form. The frontend uses these IDs, as well as category and location IDs, when submitting requests; it does not send display labels as database foreign keys.
+`GET /api/departments` returns complaint-routing department IDs and names. The admin uses these when creating a faculty account; students select their enrolled program and semester instead. Complaint forms send category and location IDs, not display labels, as database foreign keys.
 
 ## Error examples
 

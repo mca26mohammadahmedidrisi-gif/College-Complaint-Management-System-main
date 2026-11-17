@@ -56,12 +56,8 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new ApiException(HttpStatus.CONFLICT, "An account with this email already exists");
         }
-        if (!departmentRepository.existsById(request.departmentId())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "The selected department does not exist");
-        }
-
         UserAccount account = new UserAccount(
-                request.departmentId(),
+                null,
                 request.fullName().trim(),
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),

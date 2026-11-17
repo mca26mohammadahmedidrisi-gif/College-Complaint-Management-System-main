@@ -4,8 +4,8 @@ Audit date: 18 November 2026
 
 ## Student registration and roster
 
-- Student sign-up now requires a stream (MSS, MCA, PGDM, or MBA) and semester (1 or 2). Values are stored on the user record and exposed only in the admin account directory; existing accounts with no academic fields remain valid.
-- The admin roster shows the total registered-student count, stream, semester, and a role filter. Apply the updated idempotent production-workflow-upgrade.sql before deploying this schema change.
+- Student sign-up asks for the enrolled stream (MSS, MCA, PGDM, or MBA) and semester (1 or 2), not an operational complaint department. The values are stored in `users.stream_name` and `users.semester` and shown in the admin account directory; existing accounts with no academic fields remain valid. Faculty continue to use the complaint-routing department list.
+- The admin roster shows the total registered-student count, stream, semester, and a role filter. The existing production-workflow-upgrade.sql must already be applied for the stream and semester columns; this follow-up does not change the database schema.
 
 
 ## Follow-up requirements hardening
@@ -30,7 +30,7 @@ Audit date: 18 November 2026
 - Allowed the two default local frontend origins and comma-separated deployed origins through CORS configuration.
 - Added row-level security to every application table in the schema, plus `db/enable-rls.sql` for an already-created Supabase schema. It adds no browser-role policies.
 - Routed the default `Other` category to Student Affairs and added common-area locations to the repeatable seed. Existing custom category departments and non-null complaint routing are preserved; a separate repair script fills only missing complaint departments.
-- Fixed the frontend/backend mismatches: registration now sends a department UUID, category and location selectors send database IDs, tracking references are accepted for image upload, staff status labels map to backend enums, and image uploads now match the backend's JPEG/PNG limit.
+- Fixed frontend/backend mismatches: complaint category and location selectors send database IDs, tracking references are accepted for image upload, staff status labels map to backend enums, and image uploads match the backend's JPEG/PNG limit. Student registration stores the enrollment stream and semester without assigning an unrelated complaint-routing department.
 - Added backend integration assertions for signed-reference resolution, owner-only history, handler identity redaction, status-history updates, and student-versus-handler authorization.
 - Added integration coverage for moderation authorization, the required reason, preservation of complaint ownership/history, and the student's removal notice.
 - Added a GitHub Actions CI workflow to run Java 17 Maven verification and frontend JavaScript syntax checks. It is not a deployment workflow.
