@@ -84,6 +84,21 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void acceptsMcaAsAStudentStream() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"MCA Student","email":"mca-student@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MCA","semester":2}
+                                """.formatted(departmentId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.user.streamName").value("MCA"))
+                .andExpect(jsonPath("$.data.user.semester").value(2));
+
+        UserAccount saved = userRepository.findByEmailIgnoreCase("mca-student@example.com").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("MCA", saved.getStreamName());
+    }
+
+    @Test
     void ignoresAttemptToChoosePrivilegedRoleDuringPublicRegistration() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -96,7 +111,7 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MCS","semester":2,"role":"FACULTY"}
+                                {"fullName":"Faculty Attempt","email":"faculty-attempt@example.com","password":"CollegePass123","departmentId":"%s","streamName":"MCA","semester":2,"role":"FACULTY"}
                                 """.formatted(departmentId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"));

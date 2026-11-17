@@ -29,7 +29,7 @@ CREATE TABLE users (
     CONSTRAINT ck_users_academic_profile CHECK (
         (stream_name IS NULL AND semester IS NULL)
         OR (stream_name IS NOT NULL AND btrim(stream_name) <> ''
-            AND stream_name IN ('MSS', 'MCS', 'PGDM', 'MBA') AND semester IS NOT NULL AND semester IN (1, 2))
+            AND stream_name IN ('MSS', 'MCA', 'PGDM', 'MBA') AND semester IS NOT NULL AND semester IN (1, 2))
     )
 );
 

@@ -28,7 +28,7 @@ public record RegisterRequest(
         UUID departmentId,
 
         @NotBlank(message = "Stream is required")
-        @Pattern(regexp = "(?i)^(MSS|MCS|PGDM|MBA)$", message = "Choose a valid stream")
+        @Pattern(regexp = "(?i)^(MSS|MCA|PGDM|MBA)$", message = "Choose a valid stream")
         String streamName,
 
         @NotNull(message = "Semester is required")

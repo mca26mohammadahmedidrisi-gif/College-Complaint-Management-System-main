@@ -6,16 +6,14 @@ ALTER TABLE public.users
     ADD COLUMN IF NOT EXISTS stream_name VARCHAR(40),
     ADD COLUMN IF NOT EXISTS semester INTEGER;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_academic_profile' AND conrelid = 'public.users'::regclass) THEN
-        ALTER TABLE public.users ADD CONSTRAINT ck_users_academic_profile CHECK (
-            (stream_name IS NULL AND semester IS NULL)
-            OR (stream_name IS NOT NULL AND btrim(stream_name) <> ''
-                AND stream_name IN ('MSS', 'MCS', 'PGDM', 'MBA') AND semester IS NOT NULL AND semester IN (1, 2))
-        );
-    END IF;
-END $$;
+-- MCS was a mistaken label for MCA. Normalize existing rows and replace the check constraint.
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS ck_users_academic_profile;
+UPDATE public.users SET stream_name = 'MCA' WHERE stream_name = 'MCS';
+ALTER TABLE public.users ADD CONSTRAINT ck_users_academic_profile CHECK (
+    (stream_name IS NULL AND semester IS NULL)
+    OR (stream_name IS NOT NULL AND btrim(stream_name) <> ''
+        AND stream_name IN ('MSS', 'MCA', 'PGDM', 'MBA') AND semester IS NOT NULL AND semester IN (1, 2))
+);
 
 CREATE INDEX IF NOT EXISTS idx_users_student_stream_semester
     ON public.users (stream_name, semester) WHERE role = 'STUDENT';

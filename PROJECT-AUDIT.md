@@ -4,7 +4,7 @@ Audit date: 18 November 2026
 
 ## Student registration and roster
 
-- Student sign-up now requires a stream (MSS, MCS, PGDM, or MBA) and semester (1 or 2). Values are stored on the user record and exposed only in the admin account directory; existing accounts with no academic fields remain valid.
+- Student sign-up now requires a stream (MSS, MCA, PGDM, or MBA) and semester (1 or 2). Values are stored on the user record and exposed only in the admin account directory; existing accounts with no academic fields remain valid.
 - The admin roster shows the total registered-student count, stream, semester, and a role filter. Apply the updated idempotent production-workflow-upgrade.sql before deploying this schema change.
 
 
